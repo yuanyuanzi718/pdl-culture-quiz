@@ -6,3 +6,5 @@ output/
 *.log
 .playwright-cli/
 .trae/
+ONLINE_INFO.md
+线上信息.md

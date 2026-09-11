@@ -1,7 +1,7 @@
 // 管理后台路由：统计、题库 CRUD、用户/订单/VIP 码查询
 import type { FastifyInstance } from 'fastify';
 import getDb from '../db/index.js';
-import { createVipCode } from '../services/vip-code.js';
+import { createVipCode, markCodeSent } from '../services/vip-code.js';
 import { config } from '../config.js';
 import { requireAdmin } from '../middleware/adminAuth.js';
 
@@ -120,20 +120,48 @@ function normalizeQuestionBody(body: QuestionBody): { error: string } | { data: 
 }
 
 export async function adminRoutes(app: FastifyInstance): Promise<void> {
-  // 人工发码：可记录买家微信号与金额（付费时填），赠送时留空即可
+  // 人工发码：有金额/微信号时创建订单并发码；无金额时仅预生成码
   app.post('/api/admin/vip-codes/issue', { preHandler: requireAdmin }, async (request, reply) => {
-    const body = (request.body ?? {}) as { wechatId?: unknown; amount?: unknown };
+    const body = (request.body ?? {}) as { userId?: unknown; paymentReference?: unknown; confirmed?: unknown; wechatId?: unknown; amount?: unknown };
+    const userId = typeof body.userId === 'number' ? body.userId : null;
+    const paymentReference = typeof body.paymentReference === 'string' ? body.paymentReference.trim() : '';
+    const confirmed = body.confirmed === true;
     const wechatId = typeof body.wechatId === 'string' ? body.wechatId.trim() : '';
-    const amount = typeof body.amount === 'number' && Number.isFinite(body.amount) && body.amount > 0 ? body.amount : null;
-
-    if (wechatId && !/^[a-zA-Z0-9_-]{1,64}$/.test(wechatId)) {
-      return reply.code(400).send({ ok: false, error: '微信号格式不正确' });
-    }
+    const amountVal = body.amount !== undefined ? Number(body.amount) : undefined;
 
     const db = getDb();
+    const hasPayment = wechatId || (amountVal !== undefined && amountVal > 0);
+
+    if (hasPayment) {
+      if (!userId) return reply.code(400).send({ ok: false, error: '缺少目标用户' });
+      if (!paymentReference) return reply.code(400).send({ ok: false, error: '缺少交易单号' });
+      if (!confirmed) return reply.code(400).send({ ok: false, error: '需确认到账后方可发码' });
+
+      const user = db.prepare('SELECT id FROM users WHERE id=?').get(userId) as { id: number } | undefined;
+      if (!user) return reply.code(400).send({ ok: false, error: '目标用户不存在' });
+
+      const existing = db.prepare("SELECT * FROM orders WHERE trade_no=?").get(paymentReference) as {
+        id: number; user_id: number; amount: number;
+      } | undefined;
+      if (existing) {
+        const code = db.prepare('SELECT code FROM vip_codes WHERE order_id=?').get(existing.id) as { code: string } | undefined;
+        if (code) return reply.send({ ok: true, data: { code: code.code } });
+      }
+
+      const issue = db.transaction(() => {
+        db.prepare("INSERT INTO orders (user_id, amount, trade_no, wechat_id, status, created_at) VALUES (?, ?, ?, ?, 'paid', ?)")
+          .run(userId, amountVal ?? config.vipPrice, paymentReference, wechatId || null, Date.now());
+        const order = db.prepare('SELECT last_insert_rowid() AS id').get() as { id: number };
+        const code = createVipCode();
+        markCodeSent(code, userId, order.id);
+        return code;
+      });
+      const code = issue();
+      return reply.send({ ok: true, data: { code } });
+    }
+
+    // 预生成模式：不创建订单，直接生成可用码
     const code = createVipCode();
-    db.prepare("UPDATE vip_codes SET status='sent', wechat_id=?, amount=?, sent_at=? WHERE code=?")
-      .run(wechatId || null, amount, Date.now(), code);
     return reply.send({ ok: true, data: { code } });
   });
   // 全局统计
@@ -289,28 +317,35 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/admin/orders', { preHandler: requireAdmin }, async (request, reply) => {
     const query = request.query as Record<string, unknown>;
     const { page, size, offset } = parsePaging(query);
+    const status = typeof query.status === 'string' ? query.status.trim() : '';
     const db = getDb();
 
     interface OrderListRow {
       id: number;
       user_id: number;
       user_phone: string | null;
-      amount: number;
+      amount: number | null;
       trade_no: string | null;
+      wechat_id: string | null;
       status: string;
       created_at: number;
     }
 
-    const total = (db.prepare('SELECT COUNT(*) AS c FROM orders').get() as { c: number }).c;
-    const rows = db
-      .prepare(
-        `SELECT o.id, o.user_id, u.phone AS user_phone, o.amount, o.trade_no, o.status, o.created_at
+    const whereClause = status ? 'WHERE o.status = ?' : '';
+    const countSql = `SELECT COUNT(*) AS c FROM orders o ${whereClause}`;
+    const total = status
+      ? (db.prepare(countSql).get(status) as { c: number }).c
+      : (db.prepare(countSql).get() as { c: number }).c;
+
+    const dataSql = `SELECT o.id, o.user_id, u.phone AS user_phone, o.amount, o.trade_no, o.wechat_id, o.status, o.created_at
          FROM orders o
          LEFT JOIN users u ON u.id = o.user_id
+         ${whereClause}
          ORDER BY o.created_at DESC
-         LIMIT ? OFFSET ?`
-      )
-      .all(size, offset) as OrderListRow[];
+         LIMIT ? OFFSET ?`;
+    const rows = status
+      ? db.prepare(dataSql).all(status, size, offset) as OrderListRow[]
+      : db.prepare(dataSql).all(size, offset) as OrderListRow[];
 
     const list = rows.map((r) => ({
       id: r.id,
@@ -318,11 +353,88 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       userPhone: r.user_phone?.startsWith('guest_') ? null : r.user_phone,
       amount: r.amount,
       tradeNo: r.trade_no,
+      wechatId: r.wechat_id,
       status: r.status,
       createdAt: r.created_at,
     }));
 
     return reply.send({ ok: true, data: { list, total, page, size } });
+  });
+
+  // 更新订单（手动补金额/微信号/状态）
+  app.patch('/api/admin/orders/:id', { preHandler: requireAdmin }, async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id) || id <= 0) return reply.code(400).send({ ok: false, error: '无效的订单 ID' });
+    const body = request.body as Record<string, unknown>;
+    const db = getDb();
+
+    const existing = db.prepare('SELECT id FROM orders WHERE id=?').get(id) as { id: number } | undefined;
+    if (!existing) return reply.code(404).send({ ok: false, error: '订单不存在' });
+
+    const updates: string[] = [];
+    const params: unknown[] = [];
+    if (body.amount !== undefined) {
+      const amount = Number(body.amount);
+      if (body.amount !== null && (!Number.isFinite(amount) || amount < 0)) return reply.code(400).send({ ok: false, error: '金额无效' });
+      updates.push('amount=?');
+      params.push(amount);
+    }
+    if (body.wechatId !== undefined) {
+      updates.push('wechat_id=?');
+      params.push(typeof body.wechatId === 'string' ? body.wechatId.trim() : null);
+    }
+    if (body.status !== undefined) {
+      const validStatuses = ['pending', 'paid', 'failed'];
+      if (!validStatuses.includes(String(body.status))) return reply.code(400).send({ ok: false, error: '状态无效' });
+      updates.push('status=?');
+      params.push(body.status);
+    }
+    if (updates.length === 0) return reply.code(400).send({ ok: false, error: '没有需要更新的字段' });
+
+    params.push(id);
+    db.prepare(`UPDATE orders SET ${updates.join(', ')} WHERE id=?`).run(...params);
+    return reply.send({ ok: true });
+  });
+
+  // 更新 VIP 码（补金额/微信号，同时创建订单）
+  app.patch('/api/admin/vip-codes/:code', { preHandler: requireAdmin }, async (request, reply) => {
+    const code = request.params.code;
+    const body = request.body as Record<string, unknown>;
+    const db = getDb();
+
+    const existing = db.prepare('SELECT * FROM vip_codes WHERE code=?').get(code) as Record<string, unknown> | undefined;
+    if (!existing) return reply.code(404).send({ ok: false, error: '激活码不存在' });
+
+    const wechatId = typeof body.wechatId === 'string' ? body.wechatId.trim() : null;
+    const amount = body.amount !== undefined ? Number(body.amount) : null;
+    if (amount !== null && (!Number.isFinite(amount) || amount < 0)) return reply.code(400).send({ ok: false, error: '金额无效' });
+
+    const userId = existing.user_id as number | null;
+
+    const update = db.transaction(() => {
+      // 更新 vip_codes
+      const sets: string[] = [];
+      const params: unknown[] = [];
+      if (wechatId !== null) { sets.push('wechat_id=?'); params.push(wechatId); }
+      if (amount !== null) { sets.push('amount=?'); params.push(amount); }
+      if (sets.length > 0) {
+        params.push(code);
+        db.prepare(`UPDATE vip_codes SET ${sets.join(', ')} WHERE code=?`).run(...params);
+      }
+
+      // 如果有金额，创建/更新订单
+      if (amount !== null && amount > 0) {
+        const order = db.prepare('SELECT id FROM orders WHERE user_id=? AND status=?').get(userId, 'pending') as { id: number } | undefined;
+        if (order) {
+          db.prepare('UPDATE orders SET amount=?, wechat_id=?, status=? WHERE id=?').run(amount, wechatId, 'paid', order.id);
+        } else if (userId) {
+          db.prepare("INSERT INTO orders (user_id, amount, wechat_id, status, created_at) VALUES (?, ?, ?, 'paid', ?)")
+            .run(userId, amount, wechatId, Date.now());
+        }
+      }
+    });
+    update();
+    return reply.send({ ok: true });
   });
 
   // VIP 码分页列表（可按 status 筛选，LEFT JOIN 用户取手机号）

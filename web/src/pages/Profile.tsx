@@ -190,17 +190,16 @@ export default function Profile() {
           <div className="mt-3 rounded-2xl bg-gradient-to-br from-primary to-red-700 p-5 text-center text-white shadow-sm">
             <p className="text-sm">解锁全部功能</p>
             <p className="my-1 text-xs text-white/80">无限刷题 · AI 对话 · 完整解析</p>
+            <p className="mb-3 text-xs text-white/70">
+              💡 AI 对话和服务器都要花钱，收点费用才能持续运营，感谢理解 🙏
+            </p>
             <button
               onClick={() => setShowWeChat(true)}
-              className="mt-2 w-full rounded-full bg-white py-2.5 text-sm font-bold text-primary"
+              className="w-full rounded-full bg-white py-2.5 text-sm font-bold text-primary"
             >
               立即解锁 ¥9.9
             </button>
           </div>
-
-          <p className="mt-3 text-center text-xs text-gray-400">
-            AI 对话每次调用 DeepSeek API，加上服务器运营成本，因此需收取少量费用以维持服务。
-          </p>
         </>
       )}
 

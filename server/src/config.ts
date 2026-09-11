@@ -4,9 +4,16 @@ import { randomBytes } from 'node:crypto';
 const production = process.env.NODE_ENV === 'production';
 function secret(name: string): string {
   const value = process.env[name]?.trim();
-  if (value && value.length >= 32 && !/change[-_ ]?me|pdl-admin|pdl-culture-quiz-2026/i.test(value)) return value;
-  if (production) throw new Error(`${name} 必须配置至少32位的独立随机密钥`);
-  return randomBytes(32).toString('hex');
+  const weak = /change[-_ ]?me|pdl-admin|pdl-culture-quiz-2026/i;
+  if (!value || weak.test(value)) {
+    if (production) throw new Error(`${name} 必须配置独立密钥`);
+    return randomBytes(32).toString('hex');
+  }
+  if (name === 'JWT_SECRET' && value.length < 32) {
+    if (production) throw new Error(`${name} 必须配置至少32位的独立随机密钥`);
+    return randomBytes(32).toString('hex');
+  }
+  return value;
 }
 function integer(name: string, fallback: number, min = 0): number {
   const value = process.env[name] === undefined ? fallback : Number(process.env[name]);

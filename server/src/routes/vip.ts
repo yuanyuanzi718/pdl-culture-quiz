@@ -51,7 +51,7 @@ export async function vipRoutes(app: FastifyInstance): Promise<void> {
   // VIP 码激活（绑定设备）
   app.post('/api/vip/activate', { preHandler: requireAuth, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     const body = (request.body ?? {}) as Partial<VipActivatePayload>;
-    const userId = body.userId;
+    const userId = typeof body.userId === 'number' ? body.userId : null;
     const code = body.code;
     const deviceId = body.deviceId;
 

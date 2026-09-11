@@ -82,8 +82,9 @@ export interface AdminOrder {
   id: number
   userId: number
   userPhone: string | null
-  amount: number
+  amount: number | null
   tradeNo: string | null
+  wechatId: string | null
   status: 'pending' | 'paid' | 'failed'
   createdAt: number
 }
@@ -140,10 +141,22 @@ export const adminApi = {
       `/admin/users?page=${params.page}&size=${params.size}`,
     ),
 
-  listOrders: (params: { page: number; size: number }) =>
-    adminRequest<Paged<AdminOrder>>(
-      `/admin/orders?page=${params.page}&size=${params.size}`,
-    ),
+  listOrders: (params: { page: number; size: number; status?: string }) => {
+    const qs = `page=${params.page}&size=${params.size}${params.status ? `&status=${encodeURIComponent(params.status)}` : ''}`
+    return adminRequest<Paged<AdminOrder>>(`/admin/orders?${qs}`)
+  },
+
+  updateOrder: (id: number, data: { amount?: number | null; wechatId?: string; status?: string }) =>
+    adminRequest<{ ok: true }>(`/admin/orders/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  updateVipCode: (code: string, data: { wechatId?: string; amount?: number | null }) =>
+    adminRequest<{ ok: true }>(`/admin/vip-codes/${code}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 
   listVipCodes: (params: { page: number; size: number; status?: string }) => {
     const q = new URLSearchParams({ page: String(params.page), size: String(params.size) })

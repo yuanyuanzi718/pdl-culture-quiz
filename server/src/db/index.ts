@@ -86,6 +86,38 @@ export function getDb(): DatabaseType {
   const chatCols = db.prepare("PRAGMA table_info('chat_logs')").all() as Array<{ name: string }>;
   if (!chatCols.some((c) => c.name === 'references_json')) db.exec('ALTER TABLE chat_logs ADD COLUMN references_json TEXT');
 
+  const orderCols = db.prepare("PRAGMA table_info('orders')").all() as Array<{ name: string }>;
+  const orderColNames = new Set(orderCols.map((c) => c.name));
+  if (!orderColNames.has('wechat_id')) {
+    db.exec('ALTER TABLE orders ADD COLUMN wechat_id TEXT');
+  }
+  // 老库 amount 为 NOT NULL，改为可空（预生成码场景金额后补）
+  const amountCol = orderCols.find((c) => c.name === 'amount');
+  if (amountCol?.notnull) {
+    db.pragma('foreign_keys = OFF');
+    db.exec(`
+      DROP TABLE IF EXISTS orders_new;
+      CREATE TABLE orders_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        amount REAL,
+        trade_no TEXT,
+        wechat_id TEXT,
+        status TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      );
+      INSERT INTO orders_new (id, user_id, amount, trade_no, wechat_id, status, created_at)
+        SELECT id, user_id, amount, trade_no, NULL, status, created_at FROM orders;
+      DROP TABLE orders;
+      ALTER TABLE orders_new RENAME TO orders;
+      CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS unique_order_reference ON orders(trade_no) WHERE trade_no IS NOT NULL;
+    `);
+    db.pragma('foreign_keys = ON');
+    console.log('[db] 已重建 orders 表：amount 改为可空，新增 wechat_id');
+  }
+
   // 如果题目表为空，尝试从 JSON 导入
   const countRow = db.prepare('SELECT COUNT(*) as c FROM questions').get() as { c: number };
   if (countRow.c === 0) {

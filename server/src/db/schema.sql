@@ -58,8 +58,9 @@ CREATE TABLE IF NOT EXISTS vip_codes (
 CREATE TABLE IF NOT EXISTS orders (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
-  amount REAL NOT NULL,
+  amount REAL,
   trade_no TEXT,
+  wechat_id TEXT,
   status TEXT NOT NULL,              -- 'pending'|'paid'|'failed'
   created_at INTEGER NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id)
