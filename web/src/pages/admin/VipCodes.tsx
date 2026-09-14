@@ -7,7 +7,21 @@ const PAGE_SIZE = 20
 
 async function copyText(text: string): Promise<boolean> {
   try {
-    await navigator.clipboard.writeText(text)
+    // 裸 IP 的 HTTP 后台不属于安全上下文，Clipboard API 会被 Safari/浏览器拒绝。
+    if (window.isSecureContext && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.setAttribute('readonly', '')
+    textarea.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    textarea.setSelectionRange(0, text.length)
+    const copied = document.execCommand('copy')
+    textarea.remove()
+    if (!copied) return false
     return true
   } catch {
     return false
@@ -15,14 +29,14 @@ async function copyText(text: string): Promise<boolean> {
 }
 
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
-  available: { text: '可用', cls: 'bg-gray-100 text-gray-600' },
+  available: { text: '不可用（未发放）', cls: 'bg-amber-100 text-amber-700' },
   sent: { text: '已发放', cls: 'bg-blue-100 text-blue-700' },
   used: { text: '已使用', cls: 'bg-green-100 text-green-700' },
 }
 
 const FILTERS = [
   { value: '', label: '全部' },
-  { value: 'available', label: '可用' },
+  { value: 'available', label: '未发放' },
   { value: 'sent', label: '已发放' },
   { value: 'used', label: '已使用' },
 ]
@@ -34,6 +48,7 @@ export default function AdminVipCodes() {
   const [issueTip, setIssueTip] = useState('')
   const [lastCode, setLastCode] = useState('')
   const [copiedCode, setCopiedCode] = useState('')
+  const [copyError, setCopyError] = useState('')
   const [issueError, setIssueError] = useState('')
   const [list, setList] = useState<AdminVipCode[]>([])
   const [total, setTotal] = useState(0)
@@ -67,6 +82,16 @@ export default function AdminVipCodes() {
   }
 
   const cancelEdit = () => setEditingCode(null)
+
+  const copyCode = async (code: string) => {
+    setCopyError('')
+    if (await copyText(code)) {
+      setCopiedCode(code)
+      setTimeout(() => setCopiedCode(''), 2000)
+    } else {
+      setCopyError('自动复制失败，请长按激活码文字复制')
+    }
+  }
 
   const saveEdit = async (code: string) => {
     const amt = editAmount.trim() ? Number(editAmount.trim()) : null
@@ -106,7 +131,7 @@ export default function AdminVipCodes() {
           }
           const result = await adminApi.issueCode(payload)
           setLastCode(result.code)
-          setIssueTip(trimmedWechat || trimmedAmount ? '已生成激活码并创建订单。' : '已预生成激活码，可在下方列表中补金额和微信号。')
+          setIssueTip(trimmedWechat || trimmedAmount ? '已生成激活码并创建订单。' : '已生成并发放激活码，可复制后发送给用户。')
           setWechatId('')
           setAmount('')
           load()
@@ -115,7 +140,7 @@ export default function AdminVipCodes() {
         } finally { setIssuing(false) }
       }}>
         <p className="font-semibold">生成激活码</p>
-        <p className="text-xs text-gray-500">留空直接预生成；填写微信号和金额则同时创建订单</p>
+        <p className="text-xs text-gray-500">生成后立即可激活；微信号和金额用于登记付款信息</p>
         <label className="block text-sm">微信号（可选）<input value={wechatId} onChange={(e) => setWechatId(e.target.value)} placeholder="付费时填写，预生成留空" className="mt-2 block w-full min-w-0 rounded border p-3" /></label>
         <label className="block text-sm">交易金额（可选，元）<input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="付费时填写，预生成留空" className="mt-2 block w-full min-w-0 rounded border p-3" /></label>
         <button disabled={issuing} className="rounded bg-primary px-4 py-2 text-white disabled:opacity-40">{issuing ? '生成中…' : '生成激活码'}</button>
@@ -127,12 +152,7 @@ export default function AdminVipCodes() {
             </div>
             <button
               type="button"
-              onClick={async () => {
-                if (await copyText(lastCode)) {
-                  setCopiedCode(lastCode)
-                  setTimeout(() => setCopiedCode(''), 2000)
-                }
-              }}
+              onClick={() => copyCode(lastCode)}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium text-white active:scale-95 ${
                 copiedCode === lastCode ? 'bg-green-500' : 'bg-primary'
               }`}
@@ -143,6 +163,8 @@ export default function AdminVipCodes() {
         )}
         {issueError && <p role="status" className="break-all text-sm text-red-600">{issueError}</p>}
       </form>
+
+      {copyError && <p role="status" className="mb-3 text-sm text-amber-700">{copyError}</p>}
 
       <div className="mb-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         {FILTERS.map((f) => (
@@ -197,17 +219,12 @@ export default function AdminVipCodes() {
                 <tr key={c.code} className="hover:bg-gray-50">
                   <td data-label="激活码" className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono font-semibold tracking-wider text-gray-900">
+                      <span className="select-text font-mono font-semibold tracking-wider text-gray-900">
                         {c.code}
                       </span>
                       <button
                         type="button"
-                        onClick={async () => {
-                          if (await copyText(c.code)) {
-                            setCopiedCode(c.code)
-                            setTimeout(() => setCopiedCode(''), 2000)
-                          }
-                        }}
+                        onClick={() => copyCode(c.code)}
                         className={`rounded px-2 py-0.5 text-xs text-white active:scale-95 ${
                           copiedCode === c.code ? 'bg-green-500' : 'bg-gray-400 hover:bg-gray-500'
                         }`}

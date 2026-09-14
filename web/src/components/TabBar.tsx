@@ -9,7 +9,7 @@ const tabs = [
 
 export default function TabBar() {
   return (
-    <nav className="flex shrink-0 border-t border-gray-200 bg-white">
+    <nav className="flex shrink-0 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)]">
       {tabs.map((t) => (
         <NavLink
           key={t.to}

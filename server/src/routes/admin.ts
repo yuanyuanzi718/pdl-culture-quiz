@@ -120,7 +120,7 @@ function normalizeQuestionBody(body: QuestionBody): { error: string } | { data: 
 }
 
 export async function adminRoutes(app: FastifyInstance): Promise<void> {
-  // 人工发码：有金额/微信号时创建订单并发码；无金额时仅预生成码
+  // 人工发码：管理员确认后生成的码立即进入可激活的“已发放”状态。
   app.post('/api/admin/vip-codes/issue', { preHandler: requireAdmin }, async (request, reply) => {
     const body = (request.body ?? {}) as { userId?: unknown; paymentReference?: unknown; confirmed?: unknown; wechatId?: unknown; amount?: unknown };
     const userId = typeof body.userId === 'number' ? body.userId : null;
@@ -130,7 +130,8 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const amountVal = body.amount !== undefined ? Number(body.amount) : undefined;
 
     const db = getDb();
-    const hasPayment = wechatId || (amountVal !== undefined && amountVal > 0);
+    // 正式发码请求即使暂未填写金额/微信号，也必须保留到账确认与目标用户校验。
+    const hasPayment = userId !== null || paymentReference || confirmed || wechatId || (amountVal !== undefined && amountVal > 0);
 
     if (hasPayment) {
       if (!userId) return reply.code(400).send({ ok: false, error: '缺少目标用户' });
@@ -160,8 +161,9 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       return reply.send({ ok: true, data: { code } });
     }
 
-    // 预生成模式：不创建订单，直接生成可用码
+    // 无订单的人工发码：也必须标记为 sent，否则用户端会拒绝激活。
     const code = createVipCode();
+    db.prepare("UPDATE vip_codes SET status='sent', sent_at=? WHERE code=?").run(Date.now(), code);
     return reply.send({ ok: true, data: { code } });
   });
   // 全局统计
@@ -363,7 +365,8 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   // 更新订单（手动补金额/微信号/状态）
   app.patch('/api/admin/orders/:id', { preHandler: requireAdmin }, async (request, reply) => {
-    const id = Number(request.params.id);
+    const routeParams = request.params as { id: string };
+    const id = Number(routeParams.id);
     if (!Number.isInteger(id) || id <= 0) return reply.code(400).send({ ok: false, error: '无效的订单 ID' });
     const body = request.body as Record<string, unknown>;
     const db = getDb();
@@ -372,33 +375,34 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     if (!existing) return reply.code(404).send({ ok: false, error: '订单不存在' });
 
     const updates: string[] = [];
-    const params: unknown[] = [];
+    const sqlParams: unknown[] = [];
     if (body.amount !== undefined) {
       const amount = Number(body.amount);
       if (body.amount !== null && (!Number.isFinite(amount) || amount < 0)) return reply.code(400).send({ ok: false, error: '金额无效' });
       updates.push('amount=?');
-      params.push(amount);
+      sqlParams.push(amount);
     }
     if (body.wechatId !== undefined) {
       updates.push('wechat_id=?');
-      params.push(typeof body.wechatId === 'string' ? body.wechatId.trim() : null);
+      sqlParams.push(typeof body.wechatId === 'string' ? body.wechatId.trim() : null);
     }
     if (body.status !== undefined) {
       const validStatuses = ['pending', 'paid', 'failed'];
       if (!validStatuses.includes(String(body.status))) return reply.code(400).send({ ok: false, error: '状态无效' });
       updates.push('status=?');
-      params.push(body.status);
+      sqlParams.push(body.status);
     }
     if (updates.length === 0) return reply.code(400).send({ ok: false, error: '没有需要更新的字段' });
 
-    params.push(id);
-    db.prepare(`UPDATE orders SET ${updates.join(', ')} WHERE id=?`).run(...params);
+    sqlParams.push(id);
+    db.prepare(`UPDATE orders SET ${updates.join(', ')} WHERE id=?`).run(...sqlParams);
     return reply.send({ ok: true });
   });
 
   // 更新 VIP 码（补金额/微信号，同时创建订单）
   app.patch('/api/admin/vip-codes/:code', { preHandler: requireAdmin }, async (request, reply) => {
-    const code = request.params.code;
+    const params = request.params as { code: string };
+    const code = params.code;
     const body = request.body as Record<string, unknown>;
     const db = getDb();
 

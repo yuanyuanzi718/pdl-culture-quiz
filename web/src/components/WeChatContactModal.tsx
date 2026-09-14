@@ -2,6 +2,7 @@
 // 复用组件：LockOverlay 与 Profile 均可调用
 
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 interface Props {
   wechatId?: string
@@ -13,15 +14,50 @@ export default function WeChatContactModal({
   onClose,
 }: Props) {
   const [copied, setCopied] = useState(false)
+  const [copyUnavailable, setCopyUnavailable] = useState(false)
+  const navigate = useNavigate()
+
+  // HTTP 页面或旧版 Safari 可能没有 Clipboard API；保留可由用户手势触发的兼容复制。
+  const legacyCopy = (text: string) => {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.setAttribute('readonly', '')
+    textarea.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    textarea.setSelectionRange(0, text.length)
+    try {
+      return document.execCommand('copy')
+    } finally {
+      textarea.remove()
+    }
+  }
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(wechatId)
+      if (window.isSecureContext && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(wechatId)
+      } else if (!legacyCopy(wechatId)) {
+        throw new Error('copy unavailable')
+      }
       setCopied(true)
+      setCopyUnavailable(false)
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      /* 剪贴板不可用时静默失败，用户可手动选中复制 */
+      // 若现代 API 因权限失败，再尝试一次兼容路径。
+      if (legacyCopy(wechatId)) {
+        setCopied(true)
+        setCopyUnavailable(false)
+        setTimeout(() => setCopied(false), 2000)
+      } else {
+        setCopyUnavailable(true)
+      }
     }
+  }
+
+  const goToActivation = () => {
+    onClose()
+    navigate('/me')
   }
 
   return (
@@ -43,15 +79,15 @@ export default function WeChatContactModal({
         <div className="mt-4 flex items-center justify-between rounded-xl border border-gray-200 px-3 py-2.5">
           <div className="text-left">
             <p className="text-[10px] text-gray-400">微信号</p>
-            <p className="text-sm font-mono font-semibold text-gray-900">{wechatId}</p>
+            <p className="select-text text-sm font-mono font-semibold text-gray-900">{wechatId}</p>
           </div>
           <button
             onClick={copy}
             className={`rounded-lg px-3 py-1.5 text-xs font-medium text-white active:scale-95 ${
-              copied ? 'bg-green-500' : 'bg-primary'
+              copied ? 'bg-green-500' : copyUnavailable ? 'bg-amber-600' : 'bg-primary'
             }`}
           >
-            {copied ? '✓ 已复制' : '复制'}
+            {copied ? '✓ 已复制' : copyUnavailable ? '请长按微信号复制' : '复制'}
           </button>
         </div>
 
@@ -64,7 +100,7 @@ export default function WeChatContactModal({
         </div>
 
         <button
-          onClick={onClose}
+          onClick={goToActivation}
           className="mt-5 w-full rounded-full bg-gray-100 py-2.5 text-sm font-medium text-gray-600 active:scale-95"
         >
           我已加好友，去输入激活码

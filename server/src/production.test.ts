@@ -102,6 +102,15 @@ describe('真实数据库全路由回归', () => {
     expect((await activate(first.json().data.code)).json().data.user.vipActivatedAt).toBeGreaterThan(0);
     expect((await activate(first.json().data.code)).json().data.activated).toBe(true);
   });
+  it('后台直接生成的激活码可立即发送给用户激活', async () => {
+    const issued = await app.inject({ method: 'POST', url: '/api/admin/vip-codes/issue', headers: admin(), payload: {} });
+    expect(issued.statusCode).toBe(200);
+    const code = issued.json().data.code as string;
+    const record = getDb().prepare('SELECT status, sent_at FROM vip_codes WHERE code=?').get(code) as { status: string; sent_at: number | null };
+    expect(record.status).toBe('sent');
+    expect(record.sent_at).toBeTypeOf('number');
+    expect((await activate(code)).statusCode).toBe(200);
+  });
   it('激活校验真实设备，已发给别人不可领取，解绑后可迁移', async () => {
     const first=(await issue()).json().data;
     expect((await activate(first.code,'another-device-123456789')).statusCode).toBe(403);

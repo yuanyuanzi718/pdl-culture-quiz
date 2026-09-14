@@ -86,7 +86,7 @@ export function getDb(): DatabaseType {
   const chatCols = db.prepare("PRAGMA table_info('chat_logs')").all() as Array<{ name: string }>;
   if (!chatCols.some((c) => c.name === 'references_json')) db.exec('ALTER TABLE chat_logs ADD COLUMN references_json TEXT');
 
-  const orderCols = db.prepare("PRAGMA table_info('orders')").all() as Array<{ name: string }>;
+  const orderCols = db.prepare("PRAGMA table_info('orders')").all() as Array<{ name: string; notnull: number }>;
   const orderColNames = new Set(orderCols.map((c) => c.name));
   if (!orderColNames.has('wechat_id')) {
     db.exec('ALTER TABLE orders ADD COLUMN wechat_id TEXT');

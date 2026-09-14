@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title>胖东来文化评估</title>
+  <rect width="512" height="512" rx="112" fill="#b91c1c"/>
+  <path d="M142 116h228v280H142z" fill="#fff" opacity=".12"/>
+  <text x="256" y="332" text-anchor="middle" fill="#fff" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="242" font-weight="700">文</text>
+</svg>
