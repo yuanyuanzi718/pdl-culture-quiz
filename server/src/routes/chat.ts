@@ -26,7 +26,7 @@ function todayChatCount(userId: number): number {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
   const row = getDb()
-    .prepare("SELECT COUNT(*) AS n FROM chat_logs WHERE user_id = ? AND role = 'user' AND created_at >= ?")
+    .prepare("SELECT COUNT(*) AS n FROM chat_logs WHERE user_id = ? AND role = 'user' AND kind = 'chat' AND created_at >= ?")
     .get(userId, start.getTime()) as { n: number };
   return row.n;
 }
@@ -86,7 +86,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       const db = getDb();
       const now = Date.now();
       const insertLog = db.prepare(
-        `INSERT INTO chat_logs (user_id, role, content, created_at, references_json) VALUES (@userId, @role, @content, @createdAt, @references)`
+        `INSERT INTO chat_logs (user_id, role, content, created_at, references_json, kind) VALUES (@userId, @role, @content, @createdAt, @references, 'preset')`
       );
       db.transaction(() => {
         insertLog.run({ userId, role: 'user', content: message, createdAt: now, references: null });

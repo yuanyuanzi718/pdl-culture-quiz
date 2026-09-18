@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS chat_logs (
   role TEXT NOT NULL,                -- 'user'|'assistant'
   content TEXT NOT NULL,
   created_at INTEGER NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'chat', -- 'chat' 正常对话 | 'preset' 预设引导（不计每日上限）
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
