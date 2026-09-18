@@ -92,8 +92,20 @@ export async function examRoutes(app: FastifyInstance): Promise<void> {
     if (!Array.isArray(questionIds) || questionIds.length === 0) {
       return reply.code(400).send({ ok: false, error: '题目列表不能为空' });
     }
+    // 答案键须为数字题号，值须为短字符串或字符串数组，防止垃圾大字段写入考试记录
+    const answerValid = typeof answers === 'object' && answers !== null && !Array.isArray(answers) &&
+      Object.entries(answers).every(([key, value]) =>
+        /^\d+$/.test(key) &&
+        (
+          (typeof value === 'string' && value.length <= 200) ||
+          (Array.isArray(value) && value.length <= 10 && value.every((v) => typeof v === 'string' && v.length <= 200))
+        )
+      );
+    if (!answerValid) {
+      return reply.code(400).send({ ok: false, error: '答案格式无效' });
+    }
 
-    if (questionIds.length > 10 || questionIds.some((id) => !Number.isSafeInteger(id) || id <= 0) || new Set(questionIds).size !== questionIds.length || typeof answers !== 'object' || answers === null || Array.isArray(answers)) {
+    if (questionIds.length > 10 || questionIds.some((id) => !Number.isSafeInteger(id) || id <= 0) || new Set(questionIds).size !== questionIds.length) {
       return reply.code(400).send({ ok: false, error: '试卷或答案格式无效' });
     }
     const db = getDb();

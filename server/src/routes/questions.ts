@@ -90,10 +90,13 @@ export async function questionRoutes(app: FastifyInstance): Promise<void> {
     const row = getDb().prepare('SELECT questions FROM exam_sessions WHERE user_id = ? AND submitted_at IS NULL').get(request.user!.userId) as { questions: string } | undefined;
     return { ok: true, data: { questions: row ? (JSON.parse(row.questions) as QuestionRow[]).map(toQuestion) : [] } };
   });
-  // 随机抽题（需 JWT）：固定配比 4 单选 + 4 判断 + 2 多选，优先未做过的题
+  // 随机抽题（需 JWT）：固定配比 4 单选 + 4 判断 + 2 多选，优先未做过的题；count 取 1-10 决定卷面题数
   app.get('/api/questions/random', { preHandler: requireAuth }, async (request, reply) => {
     const userId = request.user!.userId;
     const db = getDb();
+    const query = request.query as { count?: unknown };
+    const countParam = Number(query.count);
+    const wanted = Number.isSafeInteger(countParam) && countParam >= 1 ? Math.min(countParam, 10) : 10;
 
     // Resume an issued paper before checking remaining quota; never charge twice.
     const pending = db.prepare('SELECT questions FROM exam_sessions WHERE user_id = ? AND submitted_at IS NULL').get(userId) as { questions: string } | undefined;
@@ -104,7 +107,7 @@ export async function questionRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(403).send({ ok: false, error: '免费额度已用完，请激活 VIP 后继续' });
     }
     const user = db.prepare('SELECT free_used_count, vip_activated_at FROM users WHERE id = ?').get(userId) as { free_used_count: number; vip_activated_at: number | null };
-    const limit = user.vip_activated_at === null ? Math.min(10, config.freeQuestionLimit - user.free_used_count) : 10;
+    const limit = user.vip_activated_at === null ? Math.min(wanted, config.freeQuestionLimit - user.free_used_count) : wanted;
     const exclude = pastQuestionIds(userId);
     const rows: QuestionRow[] = [];
     for (const plan of EXAM_PLAN) rows.push(...pickByType(db, plan.type, plan.count, exclude));

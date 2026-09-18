@@ -85,7 +85,8 @@ function normalizeQuestionBody(body: QuestionBody): { error: string } | { data: 
   if (body.options.length > 26 || body.options.some((o) => typeof o !== 'string' || !o.trim())) return { error: '选项必须是非空文本且不超过26项' };
   const options = body.options.map((o) => (o as string).trim());
   if (new Set(options).size !== options.length) return { error: '选项不可重复' };
-  if (type === 'judge' && (options.length !== 2 || options[0] !== '正确' || options[1] !== '错误')) return { error: '判断题选项必须依次为正确、错误' };
+  // 判断题只需恰好两个选项（历史题目存在"是/不是"等多种措辞，不强制文案）
+  if (type === 'judge' && options.length !== 2) return { error: '判断题必须恰好两个选项' };
 
   // 答案：多选存字母数组 JSON，单选/判断直接存字母
   let answer: string;
@@ -414,6 +415,10 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     if (amount !== null && (!Number.isFinite(amount) || amount < 0)) return reply.code(400).send({ ok: false, error: '金额无效' });
 
     const userId = existing.user_id as number | null;
+    // 未绑定用户的码无法生成收款订单，明确拒绝而不是静默丢失金额
+    if (amount !== null && amount > 0 && !userId) {
+      return reply.code(400).send({ ok: false, error: '该激活码未关联用户，无法记账收款；请通过发码流程对用户发码' });
+    }
 
     const update = db.transaction(() => {
       // 更新 vip_codes
