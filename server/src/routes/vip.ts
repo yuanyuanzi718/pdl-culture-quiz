@@ -95,10 +95,12 @@ export async function vipRoutes(app: FastifyInstance): Promise<void> {
 
     if (record.user_id !== null && record.user_id !== userId) return reply.code(403).send({ ok: false, error: '该激活码已发放给其他用户' });
 
-    // 校验是否过期
-    const expiredAt = (record.sent_at ?? record.created_at) + config.vipCodeValidHours * 3600 * 1000;
-    if (Date.now() > expiredAt) {
-      return reply.code(400).send({ ok: false, error: 'VIP 码已过期' });
+    // 校验是否过期：仅限从未激活过的发放码；已激活（已付费）的码解绑后不再过期
+    if (!record.activated_at) {
+      const expiredAt = (record.sent_at ?? record.created_at) + config.vipCodeValidHours * 3600 * 1000;
+      if (Date.now() > expiredAt) {
+        return reply.code(400).send({ ok: false, error: 'VIP 码已过期' });
+      }
     }
 
     // 事务：标记码 used + 绑定设备 + 激活用户

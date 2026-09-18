@@ -61,10 +61,11 @@ export function activateCode(code: string, userId: number, deviceId: string): vo
   ).run({ code, userId, deviceId, now });
 }
 
-// 解绑 VIP 码：状态改回 sent，清空设备/激活时间，释放给其他设备使用
+// 解绑 VIP 码：状态改回 sent，清空设备绑定，释放给其他设备使用。
+// 保留 activated_at 作为"曾被激活过（已付费）"的凭证，解绑后的码不再受 24 小时有效期限制。
 export function unbindCode(code: string): void {
   const db = getDb();
   db.prepare(
-    `UPDATE vip_codes SET status='sent', user_id=NULL, device_id=NULL, activated_at=NULL, sent_at=@sentAt WHERE code=@code`
+    `UPDATE vip_codes SET status='sent', user_id=NULL, device_id=NULL, sent_at=@sentAt WHERE code=@code`
   ).run({ code, sentAt: Date.now() });
 }
