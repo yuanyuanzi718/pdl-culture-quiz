@@ -151,6 +151,14 @@ describe('真实数据库全路由回归', () => {
     getDb().prepare('UPDATE users SET chat_free_used_count=? WHERE id=?').run(config.freeChatLimit,user.id);
     expect((await app.inject({method:'POST',url:'/api/chat',headers:auth,payload:{userId:user.id,message:'文化'}})).statusCode).toBe(403);
   });
+  it('每日对话次数达到上限后拒绝且不落库、不调AI', async () => {
+    const insert = getDb().prepare("INSERT INTO chat_logs(user_id,role,content,created_at) VALUES (?,?,'历史',?)");
+    getDb().transaction(() => { for (let i = 0; i < config.chatDailyLimit; i++) insert.run(user.id, 'user', Date.now()); })();
+    const response = await app.inject({method:'POST',url:'/api/chat',headers:auth,payload:{userId:user.id,message:'超出上限的问题'}});
+    expect(response.statusCode).toBe(429);
+    expect(response.json().code).toBe('DAILY_LIMIT');
+    expect((getDb().prepare('SELECT COUNT(*) AS n FROM chat_logs').get() as {n:number}).n).toBe(config.chatDailyLimit);
+  });
   it('AI聊天历史按当前身份读取', async () => {
     const other=await guest(); getDb().prepare("INSERT INTO chat_logs(user_id,role,content,created_at) VALUES (?,'user','他人对话',?)").run(other.user.id,Date.now());
     expect((await app.inject({url:'/api/chat/history',headers:auth})).json().data.messages).toEqual([]);

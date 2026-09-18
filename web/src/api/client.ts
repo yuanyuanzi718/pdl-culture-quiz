@@ -27,11 +27,12 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
 
   const res = await fetch(`${BASE}${path}`, { ...options, headers })
   if (!res.ok) {
-    // 后端错误格式：{ ok: false, error: "..." }
+    // 后端错误格式：{ ok: false, error: "...", code?: "..." }
     const body = await res.json().catch(() => ({}))
     const msg = body?.error || `请求失败（${res.status}）`
-    const err = new Error(msg)
-    ;(err as Error & { status: number }).status = res.status
+    const err = new Error(msg) as Error & { status: number; code?: string }
+    err.status = res.status
+    if (typeof body?.code === 'string') err.code = body.code
     throw err
   }
 

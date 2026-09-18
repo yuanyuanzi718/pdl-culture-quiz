@@ -2,14 +2,14 @@
   "name": "胖东来文化评估",
   "short_name": "文化评估",
   "description": "胖东来企业文化学习与评估工具",
-  "start_url": "/pdltk/",
-  "scope": "/pdltk/",
+  "start_url": "/pdl-tiku/",
+  "scope": "/pdl-tiku/",
   "display": "standalone",
   "background_color": "#f5f5f5",
   "theme_color": "#b91c1c",
   "icons": [
     {
-      "src": "/pdltk/icon.svg",
+      "src": "/pdl-tiku/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"

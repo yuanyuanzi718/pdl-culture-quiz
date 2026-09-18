@@ -79,6 +79,7 @@ export default function Chat() {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [err, setErr] = useState('')
+  const [dailyExhausted, setDailyExhausted] = useState(false)
   const [suggestions, setSuggestions] = useState<string[]>(() => pickRandom(3))
   const listRef = useRef<HTMLDivElement>(null)
   // 防止 StrictMode 下 pendingQuestion 被消费两次
@@ -141,9 +142,16 @@ export default function Chat() {
       // 刷新用户态以同步剩余对话次数
       void refreshProfile().catch(() => {})
     } catch (e) {
-      setInput(text)
-      setErr(e instanceof Error ? e.message : '发送失败')
-      setMessages((prev) => prev.slice(0, -1))
+      const daily = (e as Error & { code?: string }).code === 'DAILY_LIMIT'
+      if (daily) {
+        setDailyExhausted(true)
+        setErr('今日对话次数已达上限，请明天再来')
+        setMessages((prev) => prev.slice(0, -1))
+      } else {
+        setInput(text)
+        setErr(e instanceof Error ? e.message : '发送失败')
+        setMessages((prev) => prev.slice(0, -1))
+      }
     } finally {
       setSending(false)
     }
@@ -172,7 +180,7 @@ export default function Chat() {
             {remaining >= 0 ? (
               <p className="mt-1 text-xs">剩余免费对话 {remaining} 次</p>
             ) : (
-              <p className="mt-1 text-xs">VIP 用户，无限对话</p>
+              <p className="mt-1 text-xs">VIP 用户</p>
             )}
           </div>
         )}
@@ -181,7 +189,7 @@ export default function Chat() {
           <div className="mt-4 space-y-2">
             <button
               onClick={() => send('胖东来简介')}
-              disabled={chatLocked}
+              disabled={chatLocked || dailyExhausted}
               className="block w-full rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5 text-left text-sm text-gray-700 shadow-sm active:scale-[0.98] disabled:opacity-50"
             >
               📖 胖东来简介
@@ -190,7 +198,7 @@ export default function Chat() {
               <button
                 key={q}
                 onClick={() => send(q)}
-                disabled={chatLocked}
+                disabled={chatLocked || dailyExhausted}
                 className="block w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left text-sm text-gray-700 shadow-sm active:scale-[0.98] disabled:opacity-50"
               >
                 {q}
@@ -244,7 +252,7 @@ export default function Chat() {
         )}
 
         {/* AI 回复后的继续追问推荐：3 个问题按钮 */}
-        {!showGuide && !sending && !chatLocked && messages.length > 0 && (
+        {!showGuide && !sending && !chatLocked && !dailyExhausted && messages.length > 0 && (
           <div className="mt-4">
             <p className="mb-2 text-xs text-gray-400">还可以继续问：</p>
             <div className="space-y-2">
@@ -264,7 +272,7 @@ export default function Chat() {
 
       {err && <p className="px-4 pb-1 text-xs text-primary">{err}</p>}
 
-      {!chatLocked && (
+      {!chatLocked && !dailyExhausted && (
         <div className="flex shrink-0 items-center gap-2 border-t border-gray-200 bg-white px-3 py-2.5">
           <input
             maxLength={6000}
@@ -289,6 +297,10 @@ export default function Chat() {
       {chatLocked && <div className="shrink-0 border-t border-gray-200 bg-white p-3 text-center">
         <p className="text-sm text-gray-600">免费对话额度已用完，历史回答仍可查看</p>
         <button onClick={() => setShowUnlock(true)} className="mt-2 rounded-full bg-primary px-5 py-2 text-sm text-white">解锁后继续提问</button>
+      </div>}
+
+      {!chatLocked && dailyExhausted && <div className="shrink-0 border-t border-gray-200 bg-white p-3 text-center">
+        <p className="text-sm text-gray-600">今日对话次数已达上限，明天再来吧</p>
       </div>}
       {showUnlock && <WeChatContactModal onClose={() => setShowUnlock(false)} />}
     </div>

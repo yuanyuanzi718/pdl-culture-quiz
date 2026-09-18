@@ -55,7 +55,7 @@ pnpm dev
 |---|---|
 | `pnpm dev` | 开发模式（Vite） |
 | `pnpm build` | 类型检查 + 生产构建到 `dist/` |
-| `pnpm preview` | 预览生产构建（带 `/pdltk/api` 代理） |
+| `pnpm preview` | 预览生产构建（带 `/pdl-tiku/api` 代理） |
 
 ## 环境变量（server/.env）
 
@@ -64,7 +64,9 @@ pnpm dev
 
 ## 部署说明
 
-生产环境部署到 `jinhui.space/pdltk/` 子路径：
+生产环境部署到 `39.105.227.38/pdl-tiku/` 子路径：
 
-- 前端构建 `base: '/pdltk/'`，Router `basename: '/pdltk'`，API baseURL `/pdltk/api`（均已配置好）
-- 服务器升配、域名备案、Nginx 配置等完整步骤见 [DEPLOY_CHECKLIST.md](./DEPLOY_CHECKLIST.md)
+- 前端构建 `base: '/pdl-tiku/'`，Router `basename: '/pdl-tiku'`，API baseURL `/pdl-tiku/api`（均已配置好）
+- 入口由胖东来商品观察系统的 Caddy（Docker :80）统一分发，`/pdl-tiku/*` 转发至主机 nginx（8080）
+- 服务器部署、Nginx 配置等完整步骤见 [DEPLOY_CHECKLIST.md](./DEPLOY_CHECKLIST.md)
+- 线上信息见 [线上信息.md](./线上信息.md)

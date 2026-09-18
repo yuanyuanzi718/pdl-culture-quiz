@@ -21,6 +21,16 @@ function isChatLocked(userId: number): boolean {
   return u.chat_free_used_count >= config.freeChatLimit && u.vip_activated_at === null;
 }
 
+// 今日已用对话次数（所有用户统一上限，保护 API 费用；页面不展示，达到才提示）
+function todayChatCount(userId: number): number {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const row = getDb()
+    .prepare("SELECT COUNT(*) AS n FROM chat_logs WHERE user_id = ? AND role = 'user' AND created_at >= ?")
+    .get(userId, start.getTime()) as { n: number };
+  return row.n;
+}
+
 // 预设问答：匹配关键词直接返回固定答案，不调 DeepSeek、不计费（作为引导）
 const PRESET_QA: Array<{ match: RegExp; answer: string }> = [
   {
@@ -59,6 +69,12 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       return reply
         .code(403)
         .send({ ok: false, error: '免费对话额度已用完，请激活 VIP 后继续' });
+    }
+
+    if (todayChatCount(userId) >= config.chatDailyLimit) {
+      return reply
+        .code(429)
+        .send({ ok: false, error: '今日对话次数已达上限，请明天再来', code: 'DAILY_LIMIT' });
     }
 
     if (message.length > 6000) return reply.code(400).send({ ok: false, error: '消息不能超过6000字' });

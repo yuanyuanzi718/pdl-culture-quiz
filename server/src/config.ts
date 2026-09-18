@@ -32,6 +32,7 @@ export const config = {
   },
   freeQuestionLimit: integer('FREE_QUESTION_LIMIT', 10),
   freeChatLimit: integer('FREE_CHAT_LIMIT', 3),
+  chatDailyLimit: integer('CHAT_DAILY_LIMIT', 50, 1),
   vipPrice: price,
   vipCodeValidHours: integer('VIP_CODE_VALID_HOURS', 24, 1),
   jwtSecret: secret('JWT_SECRET'),

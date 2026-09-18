@@ -4,7 +4,7 @@
 
 ## 发布范围
 
-生产前端统一使用 `/pdltk/`，API地址为 `/pdltk/api/`。后端监听 `127.0.0.1:3001`，反向代理将API路径转换为 `/api/`。当前商业流程是微信人工核实收款后由管理员发码，未接入支付宝自动支付或短信。
+生产前端统一使用 `/pdl-tiku/`，API地址为 `/pdl-tiku/api/`。后端监听 `172.20.0.1:3001`（Docker 网络），反向代理将API路径转换为 `/api/`。当前商业流程是微信人工核实收款后由管理员发码，未接入支付宝自动支付或短信。
 
 本地SQLite只用于开发和验收，包含历史访问记录。首次上线从273道题的JSON初始化全新数据库，不复制本地用户、订单、激活码、答题记录或聊天记录。后续升级保留生产数据库。
 
@@ -50,33 +50,33 @@ NODE_ENV=production node dist/index.js
 在既有HTTPS站点内合并以下Nginx位置配置，勿覆盖服务器上的其他项目。实际域名和证书使用经过确认的值。
 
 ```nginx
-location = /pdltk { return 301 /pdltk/; }
-location /pdltk/api/ {
-    proxy_pass http://127.0.0.1:3001/api/;
+location = /pdl-tiku { return 301 /pdl-tiku/; }
+location /pdl-tiku/api/ {
+    proxy_pass http://172.20.0.1:3001/api/;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $remote_addr;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_read_timeout 60s;
 }
-location /pdltk/ {
+location /pdl-tiku/ {
     alias /opt/projects/pdltk/web/dist/;
     index index.html;
-    try_files $uri $uri/ /pdltk/index.html;
+    try_files $uri $uri/ /pdl-tiku/index.html;
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
 }
 ```
 
-服务端只信任本机代理，反代应覆盖客户端传来的转发地址。首次部署前确认域名、备案、HTTPS和端口实际状态；本轮没有操作云上基础设施。
+反向代理由主机 nginx（8080）处理，Caddy（Docker :80）将 `/pdl-tiku/*` 转发至 nginx。首次部署前确认域名、备案、HTTPS 和端口实际状态。
 
 ## 上线验收及回退
 
 - [x] 用户完成本地复测
 - [x] 云端强随机密钥、AI配置、持久化路径已落实
 - [x] 生产依赖在Linux上安装成功，服务进程持续运行
-- [x] `/pdltk/`、`/pdltk/exam`、`/pdltk/chat`、`/pdltk/me`、`/pdltk/admin` 可直接访问并刷新
-- [x] `/pdltk/api/health` 返回200，正常抽题、交卷、AI调用、管理端访问通过
+- [x] `/pdl-tiku/`、`/pdl-tiku/exam`、`/pdl-tiku/chat`、`/pdl-tiku/me`、`/pdl-tiku/admin` 可直接访问并刷新
+- [x] `/pdl-tiku/api/health` 返回200，正常抽题、交卷、AI调用、管理端访问通过
 - [x] 旧 `/api/payment/alipay/*` 和 `/api/sms/send` 返回404
 - [x] 首次启动只有题库数据，没有本地测试账户、订单或激活码
 - [ ] 生产SQLite在线备份和恢复路径落实；备份包含WAL一致性，不能只复制运行中的主文件

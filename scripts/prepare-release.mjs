@@ -14,5 +14,5 @@ function files(dir) { return readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.
 const list=files(release);
 if (list.some(p=>/\.db(?:-|$)|\/\.env$|\.test\.|node_modules|private-backups/.test(p))) throw new Error('发布包包含不应发布的数据');
 const questions=JSON.parse(readFileSync(join(release,'server/data/questions.json'),'utf8'));
-writeFileSync(join(release,'manifest.json'),JSON.stringify({createdAt:new Date().toISOString(),questionCount:questions.length,basePath:'/pdltk/',databaseIncluded:false,secretsIncluded:false,files:list.map(p=>({path:p.slice(release.length+1),sha256:createHash('sha256').update(readFileSync(p)).digest('hex')}))},null,2));
+writeFileSync(join(release,'manifest.json'),JSON.stringify({createdAt:new Date().toISOString(),questionCount:questions.length,basePath:'/pdl-tiku/',databaseIncluded:false,secretsIncluded:false,files:list.map(p=>({path:p.slice(release.length+1),sha256:createHash('sha256').update(readFileSync(p)).digest('hex')}))},null,2));
 console.log(release);
