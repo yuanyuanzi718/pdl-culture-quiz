@@ -4,7 +4,7 @@ import { api } from '../api/client'
 import type { User } from '../types'
 
 // 免费题数上限（与后端约定一致）
-export const FREE_QUESTION_LIMIT = 10
+export const FREE_QUESTION_LIMIT = 3
 
 interface UserState {
   token: string | null

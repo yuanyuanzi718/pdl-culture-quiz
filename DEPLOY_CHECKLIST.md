@@ -32,7 +32,7 @@ node scripts/prepare-release.mjs
 - `JWT_SECRET`、`ADMIN_TOKEN`：分别生成至少32位随机值，禁止沿用旧默认值。启动会校验。
 - `DEEPSEEK_API_KEY`、`DEEPSEEK_MODEL`：填写已实际验证的服务配置；生产缺失时禁止启动。`DEEPSEEK_BASE_URL` 默认官方地址，可带或不带 `/v1`。
 - `DATABASE_PATH=/opt/projects/pdltk/data/pdl-culture.db`：持久化路径，目录由服务用户可读写。
-- `HOST=127.0.0.1`、`PORT=3001`、`FREE_QUESTION_LIMIT=10`、`FREE_CHAT_LIMIT=3`、`VIP_PRICE=9.9`、`VIP_CODE_VALID_HOURS=24`。
+- `HOST=127.0.0.1`、`PORT=3001`、`FREE_QUESTION_LIMIT=3`、`FREE_CHAT_LIMIT=10`、`VIP_PRICE=9.9`、`VIP_CODE_VALID_HOURS=24`。
 - 价格目前前端文案为9.9元；调整价格时必须同步前端并重新构建。
 
 在服务器安装目标平台的生产依赖，不从macOS复制原生模块：

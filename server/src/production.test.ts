@@ -23,6 +23,7 @@ const draw = async () => (await app.inject({ method: 'GET', url: '/api/questions
 const submit = (ids: number[], answers: Record<string, unknown> = {}) => app.inject({ method: 'POST', url: '/api/exam/submit', headers: auth, payload: { userId: user.id, questionIds: ids, answers } });
 const issue = (reference = 'QA-TRANSACTION-000001', userId = user.id) => app.inject({ method: 'POST', url: '/api/admin/vip-codes/issue', headers: admin(), payload: { userId, paymentReference: reference, confirmed: true } });
 const activate = (code: string, deviceId = user.deviceId) => app.inject({ method: 'POST', url: '/api/vip/activate', headers: auth, payload: { userId: user.id, code, deviceId } });
+const asVip = () => getDb().prepare('UPDATE users SET vip_activated_at=? WHERE id=?').run(Date.now(), user.id);
 
 beforeEach(async () => {
   closeDb(); dir = mkdtempSync(join(tmpdir(), 'pdl-real-db-')); process.env.DATABASE_PATH = join(dir, 'qa.db');
@@ -55,35 +56,41 @@ describe('真实数据库全路由回归', () => {
     }
   });
   it('抽题配比正确，无答案或解析泄漏，刷新只领取同一试卷', async () => {
+    asVip();
     const first = await draw(); const second = await draw();
     expect(first.length).toBe(10); expect(first).toEqual(second);
     expect(first.map(q => q.type)).toEqual(['single','single','single','single','judge','judge','judge','judge','multi','multi']);
     for (const q of first) { expect(q).not.toHaveProperty('answer'); expect(q.explanation).toBeNull(); }
-    expect((getDb().prepare('SELECT free_used_count AS n FROM users WHERE id=?').get(user.id) as { n: number }).n).toBe(10);
+    expect((getDb().prepare('SELECT free_used_count AS n FROM users WHERE id=?').get(user.id) as { n: number }).n).toBe(0);
   });
   it('正确答案满分，交卷后免费锁定，重复交卷不重复落记录', async () => {
-    const qs = await draw(); const answers: Record<string, unknown> = {};
+    expect(config.freeQuestionLimit).toBeLessThanOrEqual(10);
+    const qs = await draw(); expect(qs.length).toBe(Math.min(10, config.freeQuestionLimit));
+    const answers: Record<string, unknown> = {};
     for (const q of qs) { const row = getDb().prepare('SELECT answer FROM questions WHERE id=?').get(q.id) as {answer: string}; answers[q.id] = q.type === 'multi' ? JSON.parse(row.answer) : row.answer; }
     const response = await submit(qs.map(q => q.id), answers);
     expect(response.json().data.score).toBe(100);
-    expect(response.json().data.details.filter((d: { correctAnswer: unknown }) => Array.isArray(d.correctAnswer)).length).toBe(2);
+    expect(response.json().data.details.filter((d: { correctAnswer: unknown }) => Array.isArray(d.correctAnswer)).length).toBe(qs.filter(q => q.type === 'multi').length);
     expect((await submit(qs.map(q => q.id), answers)).statusCode).toBe(409);
     expect((await app.inject({ url: '/api/questions/random', headers: auth })).statusCode).toBe(403);
     const records = await app.inject({ url: `/api/exam/records/${user.id}`, headers: auth }); expect(records.json().data.records.length).toBe(1);
   });
   it('拒绝未领取、篡改、重复和非法题目编号', async () => {
     expect((await submit([1])).statusCode).toBe(409);
+    asVip();
     const qs = await draw(); const ids = qs.map(q => q.id);
     for (const bad of [[999999], [ids[0],ids[0]], [0], ['1'], ids.slice(0,9)]) expect((await submit(bad as number[])).statusCode).toBe(400);
   });
   it('管理员编辑后仍按领取时的试卷快照判分', async () => {
+    asVip();
     const qs = await draw(); const q = qs[0];
     const row = getDb().prepare('SELECT answer FROM questions WHERE id=?').get(q.id) as { answer: string };
     getDb().prepare("UPDATE questions SET answer='Z' WHERE id=?").run(q.id);
     const result = await submit(qs.map(q => q.id), { [q.id]: row.answer });
     expect(result.json().data.details.find((d: {questionId: number}) => d.questionId===q.id).correct).toBe(true);
   });
-  it('剩余3道额度只发3题，空题库不扣额度', async () => {
+  it('剩余3道额度只发3题，空题库不扣额度', async (ctx) => {
+    ctx.skip(config.freeQuestionLimit < 3);
     getDb().prepare('UPDATE users SET free_used_count=? WHERE id=?').run(config.freeQuestionLimit-3,user.id);
     expect((await draw()).length).toBe(3);
     await submit((await draw()).map(q=>q.id));
