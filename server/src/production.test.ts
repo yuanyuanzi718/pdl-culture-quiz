@@ -57,29 +57,49 @@ describe('真实数据库全路由回归', () => {
   });
   it('抽题配比正确，无答案或解析泄漏，刷新只领取同一试卷', async () => {
     asVip();
-    const first = await draw(); const second = await draw();
-    expect(first.length).toBe(10); expect(first).toEqual(second);
-    expect(first.map(q => q.type)).toEqual(['single','single','single','single','judge','judge','judge','judge','multi','multi']);
-    for (const q of first) { expect(q).not.toHaveProperty('answer'); expect(q.explanation).toBeNull(); }
-    expect((getDb().prepare('SELECT free_used_count AS n FROM users WHERE id=?').get(user.id) as { n: number }).n).toBe(0);
+    const saved = config.examQuestionsPerRound;
+    config.examQuestionsPerRound = 5;
+    try {
+      const first = await draw(); const second = await draw();
+      expect(first.length).toBe(5); expect(first).toEqual(second);
+      expect(first.map(q => q.type)).toEqual(['single','single','judge','judge','multi']);
+      for (const q of first) { expect(q).not.toHaveProperty('answer'); expect(q.explanation).toBeNull(); }
+      expect((getDb().prepare('SELECT free_used_count AS n FROM users WHERE id=?').get(user.id) as { n: number }).n).toBe(0);
+    } finally { config.examQuestionsPerRound = saved; }
   });
-  it('正确答案满分，交卷后免费锁定，重复交卷不重复落记录', async () => {
-    expect(config.freeQuestionLimit).toBeLessThanOrEqual(10);
-    const qs = await draw(); expect(qs.length).toBe(Math.min(10, config.freeQuestionLimit));
+  it('每次题数由配置决定，题型配比按 4:4:2 换算', async () => {
+    asVip();
+    const saved = config.examQuestionsPerRound;
+    config.examQuestionsPerRound = 10;
+    try {
+      const qs = await draw();
+      expect(qs.length).toBe(10);
+      expect(qs.map(q => q.type)).toEqual(['single','single','single','single','judge','judge','judge','judge','multi','multi']);
+    } finally { config.examQuestionsPerRound = saved; }
+  });
+  it('老库按题数累计的用量在启动时换算成次数', () => {
+    const db = getDb();
+    db.prepare('INSERT INTO exam_sessions (user_id, questions, created_at) VALUES (?, ?, ?)').run(user.id, '[]', Date.now());
+    db.prepare('UPDATE users SET free_used_count=10 WHERE id=?').run(user.id);
+    closeDb();
+    const after = getDb().prepare('SELECT free_used_count AS n FROM users WHERE id=?').get(user.id) as { n: number };
+    expect(after.n).toBe(1);
+  });
+  it('正确答案满分，重复交卷不重复落记录', async () => {
+    const qs = await draw(); expect(qs.length).toBe(config.examQuestionsPerRound);
     const answers: Record<string, unknown> = {};
     for (const q of qs) { const row = getDb().prepare('SELECT answer FROM questions WHERE id=?').get(q.id) as {answer: string}; answers[q.id] = q.type === 'multi' ? JSON.parse(row.answer) : row.answer; }
     const response = await submit(qs.map(q => q.id), answers);
     expect(response.json().data.score).toBe(100);
     expect(response.json().data.details.filter((d: { correctAnswer: unknown }) => Array.isArray(d.correctAnswer)).length).toBe(qs.filter(q => q.type === 'multi').length);
     expect((await submit(qs.map(q => q.id), answers)).statusCode).toBe(409);
-    expect((await app.inject({ url: '/api/questions/random', headers: auth })).statusCode).toBe(403);
     const records = await app.inject({ url: `/api/exam/records/${user.id}`, headers: auth }); expect(records.json().data.records.length).toBe(1);
   });
   it('拒绝未领取、篡改、重复和非法题目编号', async () => {
     expect((await submit([1])).statusCode).toBe(409);
     asVip();
     const qs = await draw(); const ids = qs.map(q => q.id);
-    for (const bad of [[999999], [ids[0],ids[0]], [0], ['1'], ids.slice(0,9)]) expect((await submit(bad as number[])).statusCode).toBe(400);
+    for (const bad of [[999999], [ids[0],ids[0]], [0], ['1'], ids.slice(0, -1)]) expect((await submit(bad as number[])).statusCode).toBe(400);
   });
   it('管理员编辑后仍按领取时的试卷快照判分', async () => {
     asVip();
@@ -89,13 +109,18 @@ describe('真实数据库全路由回归', () => {
     const result = await submit(qs.map(q => q.id), { [q.id]: row.answer });
     expect(result.json().data.details.find((d: {questionId: number}) => d.questionId===q.id).correct).toBe(true);
   });
-  it('剩余3道额度只发3题，空题库不扣额度', async (ctx) => {
-    ctx.skip(config.freeQuestionLimit < 3);
-    getDb().prepare('UPDATE users SET free_used_count=? WHERE id=?').run(config.freeQuestionLimit-3,user.id);
-    expect((await draw()).length).toBe(3);
-    await submit((await draw()).map(q=>q.id));
-    getDb().prepare('UPDATE users SET free_used_count=0 WHERE id=?').run(user.id); getDb().prepare('DELETE FROM questions').run();
-    expect((await app.inject({ url:'/api/questions/random', headers:auth })).statusCode).toBe(503);
+  it('免费次数用尽后锁定，空题库不扣次数', async () => {
+    // 用完全部免费答题次数：每次一套完整试卷，按次扣 1
+    for (let i = 0; i < config.freeExamLimit; i++) {
+      const qs = await draw();
+      await submit(qs.map(q => q.id));
+    }
+    expect((await app.inject({ url: '/api/questions/random', headers: auth })).statusCode).toBe(403);
+    // 重置为全新免费用户 + 空题库：抽题失败但不扣次数
+    getDb().prepare('UPDATE users SET free_used_count=0 WHERE id=?').run(user.id);
+    getDb().prepare('DELETE FROM exam_sessions WHERE user_id=?').run(user.id);
+    getDb().prepare('DELETE FROM questions').run();
+    expect((await app.inject({ url: '/api/questions/random', headers: auth })).statusCode).toBe(503);
     expect((getDb().prepare('SELECT free_used_count AS n FROM users WHERE id=?').get(user.id) as {n:number}).n).toBe(0);
   });
   it('个人资料和考试记录不允许越权', async () => {

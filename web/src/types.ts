@@ -34,8 +34,10 @@ export interface User {
   chatFreeUsedCount: number
   isLocked: boolean
   isChatLocked: boolean
-  freeLimit?: number
-  chatFreeLimit?: number
+  // 额度口径由后端下发，前端不再各自写死
+  freeExamLimit: number
+  examQuestionsPerRound: number
+  chatFreeLimit: number
   createdAt: number
 }
 

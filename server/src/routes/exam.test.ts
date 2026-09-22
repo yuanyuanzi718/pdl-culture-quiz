@@ -86,7 +86,7 @@ describe('考试判分与免费额度', () => {
   it('选项文本答案应判分正确（修复前 bug：永远判错）', async () => {
     const drawResp = await app.inject({
       method: 'GET',
-      url: '/api/questions/random?count=3',
+      url: '/api/questions/random',
       headers: { authorization: `Bearer ${token}` },
     });
     expect(drawResp.statusCode).toBe(200);
@@ -125,7 +125,7 @@ describe('考试判分与免费额度', () => {
   it('字母答案也应判分正确（兼容旧 API）', async () => {
     const drawResp = await app.inject({
       method: 'GET',
-      url: '/api/questions/random?count=3',
+      url: '/api/questions/random',
       headers: { authorization: `Bearer ${token}` },
     });
     const questions = drawResp.json().data.questions as Array<{ id: number; type: string }>;
@@ -150,7 +150,7 @@ describe('考试判分与免费额度', () => {
   it('答错应得 0 分', async () => {
     const drawResp = await app.inject({
       method: 'GET',
-      url: '/api/questions/random?count=3',
+      url: '/api/questions/random',
       headers: { authorization: `Bearer ${token}` },
     });
     const questions = drawResp.json().data.questions as Array<{ id: number }>;
@@ -169,16 +169,16 @@ describe('考试判分与免费额度', () => {
     expect(result.data.correctCount).toBe(0);
   });
 
-  it('抽题时累加 free_used_count，交卷时不应重复累加（修复 bug 2）', async () => {
+  it('抽题时按「次」累加 free_used_count，交卷时不应重复累加', async () => {
     await app.inject({
       method: 'GET',
-      url: '/api/questions/random?count=3',
+      url: '/api/questions/random',
       headers: { authorization: `Bearer ${token}` },
     });
     let user = db.prepare('SELECT free_used_count FROM users WHERE id = ?').get(userId) as {
       free_used_count: number;
     };
-    expect(user.free_used_count).toBe(3);
+    expect(user.free_used_count).toBe(1);
 
     const ids = (db.prepare('SELECT id FROM questions').all() as Array<{ id: number }>)
       .map((r) => r.id)
@@ -192,17 +192,17 @@ describe('考试判分与免费额度', () => {
     user = db.prepare('SELECT free_used_count FROM users WHERE id = ?').get(userId) as {
       free_used_count: number;
     };
-    expect(user.free_used_count).toBe(3);
+    expect(user.free_used_count).toBe(1);
   });
 
   it('锁定用户不能抽题', async () => {
     db.prepare('UPDATE users SET free_used_count = ? WHERE id = ?').run(
-      config.freeQuestionLimit,
+      config.freeExamLimit,
       userId
     );
     const resp = await app.inject({
       method: 'GET',
-      url: '/api/questions/random?count=1',
+      url: '/api/questions/random',
       headers: { authorization: `Bearer ${token}` },
     });
     expect(resp.statusCode).toBe(403);
@@ -218,7 +218,7 @@ describe('考试判分与免费额度', () => {
     };
     await app.inject({
       method: 'GET',
-      url: '/api/questions/random?count=3',
+      url: '/api/questions/random',
       headers: { authorization: `Bearer ${token}` },
     });
     const after = db.prepare('SELECT free_used_count FROM users WHERE id = ?').get(userId) as {
@@ -258,7 +258,7 @@ describe('考试判分与免费额度', () => {
   it('考试记录应持久化并可查询', async () => {
     const drawResp = await app.inject({
       method: 'GET',
-      url: '/api/questions/random?count=2',
+      url: '/api/questions/random',
       headers: { authorization: `Bearer ${token}` },
     });
     const questions = drawResp.json().data.questions as Array<{ id: number }>;

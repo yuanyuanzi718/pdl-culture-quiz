@@ -3,9 +3,6 @@ import { persist } from 'zustand/middleware'
 import { api } from '../api/client'
 import type { User } from '../types'
 
-// 免费题数上限（与后端约定一致）
-export const FREE_QUESTION_LIMIT = 3
-
 interface UserState {
   token: string | null
   user: User | null
@@ -59,6 +56,11 @@ export const useUserStore = create<UserState>()(
         set({ user: data.user })
       },
     }),
-    { name: 'pdl-user' },
+    {
+      name: 'pdl-user',
+      // v2：额度口径改为后端下发（次数 + 每次题数），旧缓存里的 user 缺这些字段，丢弃后重新拉取
+      version: 2,
+      migrate: (state) => ({ ...(state as object), user: null }) as UserState,
+    },
   ),
 )

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import { FREE_QUESTION_LIMIT, useUserStore } from '../store/user'
+import { useUserStore } from '../store/user'
 import type { ExamRecord } from '../types'
 import WeChatContactModal from '../components/WeChatContactModal'
 
@@ -43,7 +43,7 @@ export default function Profile() {
   }
 
   const activated = !!user.vipActivatedAt
-  const remainFree = Math.max(0, (user.freeLimit ?? FREE_QUESTION_LIMIT) - user.freeUsedCount)
+  const remainFree = Math.max(0, user.freeExamLimit - user.freeUsedCount)
 
   // 激活 VIP 码
   const activate = async () => {
@@ -107,9 +107,9 @@ export default function Profile() {
           </p>
         </div>
         <div className="rounded-2xl bg-white p-4 text-center shadow-sm">
-          <p className="text-xs text-gray-400">剩余免费题数</p>
+          <p className="text-xs text-gray-400">剩余免费次数</p>
           <p className="mt-1 text-sm font-semibold text-gray-700">
-            {activated ? '无限' : `${remainFree} / ${user.freeLimit ?? FREE_QUESTION_LIMIT}`}
+            {activated ? '无限' : `${remainFree} / ${user.freeExamLimit}`}
           </p>
         </div>
       </div>

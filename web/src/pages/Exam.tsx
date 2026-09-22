@@ -65,7 +65,7 @@ export default function Exam() {
     setLoading(true)
     setErr('')
     try {
-      const list = await api.randomQuestions(10)
+      const list = await api.randomQuestions()
       setQuestions(list)
       setAnswers({})
       setIdx(0)
@@ -244,7 +244,9 @@ export default function Exam() {
     <div className="relative flex h-full flex-col items-center justify-center px-6 text-center">
       <div className="mb-2 text-6xl">📚</div>
       <h1 className="mb-2 text-xl font-semibold text-gray-900">模拟考试</h1>
-      <p className="mb-1 text-sm text-gray-500">每次随机抽取 10 道题</p>
+      <p className="mb-1 text-sm text-gray-500">
+        {user ? `每次随机抽取 ${user.examQuestionsPerRound} 道题` : '每次随机抽取一套试卷'}
+      </p>
       <p className="mb-4 text-sm text-gray-500">覆盖胖东来文化核心理念</p>
       <p className="mb-8 text-xs text-gray-400">学习练习题库，非官方招聘考试。包含2025年公示题及资料练习题。</p>
       <button

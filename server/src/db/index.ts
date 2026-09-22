@@ -119,6 +119,22 @@ export function getDb(): DatabaseType {
     console.log('[db] 已重建 orders 表：amount 改为可空，新增 wechat_id');
   }
 
+  // 免费答题额度由「题数」改为「次数」：老库 users.free_used_count 存的是抽到的题数，
+  // 直接沿用会把只抽过一套试卷（旧口径 10）的用户误判为额度用尽。发一套试卷必留一行
+  // exam_sessions，故按试卷套数重算即为次数，且对新口径同样成立，可每次启动幂等校正。
+  const recalculated = db.prepare(`
+    UPDATE users SET free_used_count = (
+      SELECT COUNT(*) FROM exam_sessions WHERE exam_sessions.user_id = users.id
+    )
+    WHERE vip_activated_at IS NULL
+      AND free_used_count <> (
+        SELECT COUNT(*) FROM exam_sessions WHERE exam_sessions.user_id = users.id
+      )
+  `).run();
+  if (recalculated.changes > 0) {
+    console.log(`[db] 已按「次」重算 ${recalculated.changes} 个用户的免费答题用量`);
+  }
+
   // 如果题目表为空，尝试从 JSON 导入
   const countRow = db.prepare('SELECT COUNT(*) as c FROM questions').get() as { c: number };
   if (countRow.c === 0) {

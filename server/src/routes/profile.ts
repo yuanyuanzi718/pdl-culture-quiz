@@ -17,9 +17,9 @@ interface UserRow {
   created_at: number;
 }
 
-// 是否已锁定（免费额度用完且未激活 VIP）
+// 是否已锁定（免费答题次数用完且未激活 VIP）
 function isLocked(user: { free_used_count: number; vip_activated_at: number | null }): boolean {
-  return user.free_used_count >= config.freeQuestionLimit && user.vip_activated_at === null;
+  return user.free_used_count >= config.freeExamLimit && user.vip_activated_at === null;
 }
 
 // 对话是否已锁定（独立额度）
@@ -41,7 +41,8 @@ function toUser(row: UserRow): User {
     chatFreeUsedCount: row.chat_free_used_count,
     isLocked: isLocked(row),
     isChatLocked: isChatLocked(row),
-    freeLimit: config.freeQuestionLimit,
+    freeExamLimit: config.freeExamLimit,
+    examQuestionsPerRound: config.examQuestionsPerRound,
     chatFreeLimit: config.freeChatLimit,
     createdAt: row.created_at,
   };

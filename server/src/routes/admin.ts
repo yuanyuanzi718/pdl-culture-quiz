@@ -308,7 +308,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       vipActivatedAt: r.vip_activated_at,
       vipCode: r.vip_code,
       freeUsedCount: r.free_used_count,
-      isLocked: r.free_used_count >= config.freeQuestionLimit && r.vip_activated_at === null,
+      isLocked: r.free_used_count >= config.freeExamLimit && r.vip_activated_at === null,
       createdAt: r.created_at,
       examCount: r.exam_count,
     }));

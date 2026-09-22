@@ -10,8 +10,9 @@ export interface User {
   chatFreeUsedCount: number;
   isLocked: boolean;
   isChatLocked: boolean;
-  freeLimit?: number;
-  chatFreeLimit?: number;
+  freeExamLimit: number;
+  examQuestionsPerRound: number;
+  chatFreeLimit: number;
   createdAt: number;
 }
 

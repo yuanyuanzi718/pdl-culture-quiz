@@ -30,8 +30,9 @@ export const config = {
     baseUrl: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
     model: process.env.DEEPSEEK_MODEL || '',
   },
-  freeQuestionLimit: integer('FREE_QUESTION_LIMIT', 3),
-  freeChatLimit: integer('FREE_CHAT_LIMIT', 10),
+  freeExamLimit: integer('FREE_EXAM_LIMIT', 3), // 免费答题次数（次）
+  examQuestionsPerRound: integer('EXAM_QUESTIONS_PER_ROUND', 5, 1), // 每次答题题数（道）
+  freeChatLimit: integer('FREE_CHAT_LIMIT', 10), // 免费对话次数（次）
   chatDailyLimit: integer('CHAT_DAILY_LIMIT', 50, 1),
   vipPrice: price,
   vipCodeValidHours: integer('VIP_CODE_VALID_HOURS', 24, 1),

@@ -17,21 +17,28 @@ interface QuestionRow {
   tags: string | null;
 }
 
-// 每次考试的固定题型配比：4 单选 + 4 判断 + 2 多选，顺序固定
-const EXAM_PLAN: Array<{ type: 'single' | 'judge' | 'multi'; count: number }> = [
-  { type: 'single', count: 4 },
-  { type: 'judge', count: 4 },
-  { type: 'multi', count: 2 },
-];
+// 题型配比 4:4:2（单选:判断:多选），按每次答题题数换算，顺序固定
+type ExamSlot = 'single' | 'judge' | 'multi';
 
-// 判断用户是否锁定
+function examPlan(size: number): Array<{ type: ExamSlot; count: number }> {
+  const single = Math.round(size * 0.4);
+  const judge = Math.round(size * 0.4);
+  const plan: Array<{ type: ExamSlot; count: number }> = [
+    { type: 'single', count: single },
+    { type: 'judge', count: judge },
+    { type: 'multi', count: size - single - judge },
+  ];
+  return plan.filter((slot) => slot.count > 0);
+}
+
+// 判断用户是否锁定（按「次」计：免费答题次数用完且未激活 VIP）
 function userLocked(userId: number): boolean {
   const db = getDb();
   const u = db.prepare('SELECT free_used_count, vip_activated_at FROM users WHERE id = ?').get(userId) as
     | { free_used_count: number; vip_activated_at: number | null }
     | undefined;
   if (!u) return true;
-  return u.free_used_count >= config.freeQuestionLimit && u.vip_activated_at === null;
+  return u.free_used_count >= config.freeExamLimit && u.vip_activated_at === null;
 }
 
 // 收集用户历史做过的题目 id
@@ -90,13 +97,11 @@ export async function questionRoutes(app: FastifyInstance): Promise<void> {
     const row = getDb().prepare('SELECT questions FROM exam_sessions WHERE user_id = ? AND submitted_at IS NULL').get(request.user!.userId) as { questions: string } | undefined;
     return { ok: true, data: { questions: row ? (JSON.parse(row.questions) as QuestionRow[]).map(toQuestion) : [] } };
   });
-  // 随机抽题（需 JWT）：固定配比 4 单选 + 4 判断 + 2 多选，优先未做过的题；count 取 1-10 决定卷面题数
+  // 随机抽题（需 JWT）：按 4:4:2 配比发一套完整试卷，免费用户每套扣 1 次额度
   app.get('/api/questions/random', { preHandler: requireAuth }, async (request, reply) => {
     const userId = request.user!.userId;
     const db = getDb();
-    const query = request.query as { count?: unknown };
-    const countParam = Number(query.count);
-    const wanted = Number.isSafeInteger(countParam) && countParam >= 1 ? Math.min(countParam, 10) : 10;
+    const size = config.examQuestionsPerRound;
 
     // Resume an issued paper before checking remaining quota; never charge twice.
     const pending = db.prepare('SELECT questions FROM exam_sessions WHERE user_id = ? AND submitted_at IS NULL').get(userId) as { questions: string } | undefined;
@@ -106,16 +111,16 @@ export async function questionRoutes(app: FastifyInstance): Promise<void> {
     if (userLocked(userId)) {
       return reply.code(403).send({ ok: false, error: '免费额度已用完，请激活 VIP 后继续' });
     }
-    const user = db.prepare('SELECT free_used_count, vip_activated_at FROM users WHERE id = ?').get(userId) as { free_used_count: number; vip_activated_at: number | null };
-    const limit = user.vip_activated_at === null ? Math.min(wanted, config.freeQuestionLimit - user.free_used_count) : wanted;
+    const user = db.prepare('SELECT vip_activated_at FROM users WHERE id = ?').get(userId) as { vip_activated_at: number | null };
     const exclude = pastQuestionIds(userId);
     const rows: QuestionRow[] = [];
-    for (const plan of EXAM_PLAN) rows.push(...pickByType(db, plan.type, plan.count, exclude));
-    const selected = rows.slice(0, limit);
+    for (const plan of examPlan(size)) rows.push(...pickByType(db, plan.type, plan.count, exclude));
+    const selected = rows.slice(0, size);
     if (!selected.length) return reply.code(503).send({ ok: false, error: '题库暂无可用题目' });
     db.transaction(() => {
       db.prepare('INSERT INTO exam_sessions (user_id, questions, created_at) VALUES (?, ?, ?)').run(userId, JSON.stringify(selected), Date.now());
-      if (user.vip_activated_at === null) db.prepare('UPDATE users SET free_used_count = free_used_count + ? WHERE id = ?').run(selected.length, userId);
+      // 按次计费：每发一套试卷消耗 1 次免费额度（VIP 不扣）
+      if (user.vip_activated_at === null) db.prepare('UPDATE users SET free_used_count = free_used_count + 1 WHERE id = ?').run(userId);
     })();
     const questions = selected.map(toQuestion);
 

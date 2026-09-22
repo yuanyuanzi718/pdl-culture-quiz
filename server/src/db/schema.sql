@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   device_id TEXT UNIQUE,              -- 设备唯一标识（前端 localStorage UUID）
   vip_activated_at INTEGER,          -- null 表示未激活
   vip_code TEXT,
-  free_used_count INTEGER DEFAULT 0,  -- 累计免费答题数（抽题+交卷计费）
+  free_used_count INTEGER DEFAULT 0,  -- 累计免费答题次数（按「次」计，抽到一套试卷即 +1）
   chat_free_used_count INTEGER DEFAULT 0,  -- 累计免费对话次数（独立计数）
   created_at INTEGER NOT NULL
 );

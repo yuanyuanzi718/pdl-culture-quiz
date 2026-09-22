@@ -98,7 +98,7 @@ export default function Chat() {
   const remaining =
     user?.vipActivatedAt != null
       ? -1
-      : Math.max(0, (user?.chatFreeLimit ?? 10) - (user?.chatFreeUsedCount ?? 0))
+      : Math.max(0, (user?.chatFreeLimit ?? 0) - (user?.chatFreeUsedCount ?? 0))
 
   useEffect(() => {
     if (!user) return

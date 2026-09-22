@@ -40,7 +40,7 @@ export default function AdminUsers() {
               <th className="px-4 py-3">ID</th>
               <th className="px-4 py-3">用户标识</th>
               <th className="px-4 py-3">VIP 状态</th>
-              <th className="px-4 py-3">免费已用</th>
+              <th className="px-4 py-3">免费已用次数</th>
               <th className="px-4 py-3">考试次数</th>
               <th className="px-4 py-3">注册时间</th>
             </tr>
@@ -79,7 +79,7 @@ export default function AdminUsers() {
                     </span>
                   )}
                 </td>
-                <td data-label="免费已用" className="px-4 py-3 text-gray-600">{u.freeUsedCount}</td>
+                <td data-label="免费已用次数" className="px-4 py-3 text-gray-600">{u.freeUsedCount}</td>
                 <td data-label="考试次数" className="px-4 py-3 text-gray-600">{u.examCount}</td>
                 <td data-label="注册时间" className="px-4 py-3 text-xs text-gray-500">{fmtTime(u.createdAt)}</td>
               </tr>
