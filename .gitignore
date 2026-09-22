@@ -8,3 +8,5 @@ output/
 .trae/
 ONLINE_INFO.md
 线上信息.md
+.DS_Store
+*.mov
