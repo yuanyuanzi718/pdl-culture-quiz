@@ -1,6 +1,38 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
-  <title>胖东来文化评估</title>
-  <rect width="512" height="512" rx="112" fill="#b91c1c"/>
-  <path d="M142 116h228v280H142z" fill="#fff" opacity=".12"/>
-  <text x="256" y="332" text-anchor="middle" fill="#fff" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="242" font-weight="700">文</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="胖东来文化评估">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#E3242B"/>
+      <stop offset="0.55" stop-color="#C8102E"/>
+      <stop offset="1" stop-color="#8F0A1F"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F6D365"/>
+      <stop offset="1" stop-color="#D9A036"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#5C0715" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <!-- 圆角底 -->
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <rect x="10" y="10" width="492" height="492" rx="108" fill="none" stroke="#FFFFFF" stroke-opacity="0.14" stroke-width="3"/>
+
+  <!-- 评分卡片 -->
+  <g filter="url(#shadow)">
+    <rect x="128" y="120" width="228" height="288" rx="34" fill="#FFFFFF"/>
+  </g>
+  <rect x="160" y="164" width="72" height="14" rx="7" fill="#E4E7EB"/>
+  <rect x="160" y="212" width="164" height="14" rx="7" fill="#EDF0F2"/>
+  <rect x="160" y="260" width="128" height="14" rx="7" fill="#EDF0F2"/>
+  <rect x="160" y="308" width="88" height="14" rx="7" fill="#EDF0F2"/>
+
+  <!-- 金色对勾徽章 -->
+  <circle cx="342" cy="350" r="74" fill="url(#gold)"/>
+  <circle cx="342" cy="350" r="74" fill="none" stroke="#FFFFFF" stroke-width="10"/>
+  <path d="M308 352 L332 378 L380 320" fill="none" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- 星光点缀 -->
+  <path d="M404 104 C408 126 414 132 436 136 C414 140 408 146 404 168 C400 146 394 140 372 136 C394 132 400 126 404 104 Z" fill="url(#gold)"/>
+  <path d="M448 190 C450.5 202 454 205.5 466 208 C454 210.5 450.5 214 448 226 C445.5 214 442 210.5 430 208 C442 205.5 445.5 202 448 190 Z" fill="#F6D365" opacity="0.9"/>
 </svg>
