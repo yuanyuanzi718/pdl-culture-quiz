@@ -57,6 +57,12 @@ export const api = {
   // 拉取用户信息：GET /profile/:userId → User（含 isLocked）
   getProfile: (userId: number) => request<User>(`/profile/${userId}`),
 
+  // 题库统计：GET /questions/stats → { total }
+  questionStats: async (): Promise<{ total: number }> => {
+    const data = await request<{ total: number }>('/questions/stats')
+    return data ?? { total: 0 }
+  },
+
   // 随机抽题：GET /questions/random → { questions: Question[] }（卷面题数由后端配置决定）
   randomQuestions: async (): Promise<Question[]> => {
     const data = await request<{ questions: Question[] }>('/questions/random')

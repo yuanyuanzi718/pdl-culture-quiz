@@ -38,6 +38,7 @@ export default function Exam() {
   const [err, setErr] = useState('')
 
   const [restoring, setRestoring] = useState(true)
+  const [totalQuestions, setTotalQuestions] = useState<number>(0)
   const draftKey = `pdl-exam-draft-${user?.id}`
   useEffect(() => {
     let active = true
@@ -51,6 +52,7 @@ export default function Exam() {
         }
       } catch { /* Invalid local draft never overrides the server paper. */ }
     }).catch((e) => { if (active) setErr(e.message) }).finally(() => { if (active) setRestoring(false) })
+    api.questionStats().then((s) => { if (active) setTotalQuestions(s.total) }).catch(() => {})
     return () => { active = false }
   }, [draftKey])
   useEffect(() => {
@@ -248,7 +250,8 @@ export default function Exam() {
         {user ? `每次随机抽取 ${user.examQuestionsPerRound} 道题` : '每次随机抽取一套试卷'}
       </p>
       <p className="mb-4 text-sm text-gray-500">覆盖胖东来文化核心理念</p>
-      <p className="mb-8 text-xs text-gray-400">学习练习题库，非官方招聘考试。包含2025年公示题及资料练习题。</p>
+      <p className="mb-2 text-xs text-gray-400">学习练习题库，非官方招聘考试。包含2025年公示题及资料练习题。</p>
+      {totalQuestions > 0 && <p className="mb-8 text-xs text-gray-400">目前题库共有 <span className="font-semibold text-primary">{totalQuestions}</span> 道题</p>}
       <button
         onClick={start}
         disabled={loading}

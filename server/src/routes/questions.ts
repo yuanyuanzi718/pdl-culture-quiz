@@ -97,6 +97,12 @@ export async function questionRoutes(app: FastifyInstance): Promise<void> {
     const row = getDb().prepare('SELECT questions FROM exam_sessions WHERE user_id = ? AND submitted_at IS NULL').get(request.user!.userId) as { questions: string } | undefined;
     return { ok: true, data: { questions: row ? (JSON.parse(row.questions) as QuestionRow[]).map(toQuestion) : [] } };
   });
+  // 题库统计（公开）：返回总题数
+  app.get('/api/questions/stats', async () => {
+    const db = getDb();
+    const row = db.prepare('SELECT COUNT(*) as total FROM questions').get() as { total: number };
+    return { ok: true, data: { total: row.total } };
+  });
   // 随机抽题（需 JWT）：按 4:4:2 配比发一套完整试卷，免费用户每套扣 1 次额度
   app.get('/api/questions/random', { preHandler: requireAuth }, async (request, reply) => {
     const userId = request.user!.userId;
