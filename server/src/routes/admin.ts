@@ -1,3 +1,8 @@
+import { userDisplayName } from '../services/user-name.js';
+import { usageStats } from '../services/analytics.js';
+import { mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 // 管理后台路由：统计、题库 CRUD、用户/订单/VIP 码查询
 import type { FastifyInstance } from 'fastify';
 import getDb from '../db/index.js';
@@ -132,7 +137,8 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
 
     const db = getDb();
     // 正式发码请求即使暂未填写金额/微信号，也必须保留到账确认与目标用户校验。
-    const hasPayment = userId !== null || paymentReference || confirmed || wechatId || (amountVal !== undefined && amountVal > 0);
+    if (amountVal !== undefined && (!Number.isFinite(amountVal) || amountVal <= 0)) return reply.code(400).send({ ok: false, error: '金额必须大于 0' });
+    const hasPayment = userId !== null || paymentReference || confirmed;
 
     if (hasPayment) {
       if (!userId) return reply.code(400).send({ ok: false, error: '缺少目标用户' });
@@ -163,8 +169,18 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // 无订单的人工发码：也必须标记为 sent，否则用户端会拒绝激活。
-    const code = createVipCode();
-    db.prepare("UPDATE vip_codes SET status='sent', sent_at=? WHERE code=?").run(Date.now(), code);
+    const code = db.transaction(() => {
+      const code = createVipCode();
+      let orderId: number | null = null;
+      if (amountVal !== undefined) {
+        const info = db.prepare("INSERT INTO orders(user_id,amount,wechat_id,status,created_at) VALUES (NULL,?,?,'paid',?)")
+          .run(amountVal, wechatId || null, Date.now());
+        orderId = Number(info.lastInsertRowid);
+      }
+      db.prepare("UPDATE vip_codes SET status='sent', sent_at=?, wechat_id=?, amount=?, order_id=? WHERE code=?")
+        .run(Date.now(), wechatId || null, amountVal ?? null, orderId, code);
+      return code;
+    })();
     return reply.send({ ok: true, data: { code } });
   });
   // 全局统计
@@ -184,6 +200,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({
       ok: true,
       data: {
+        ...usageStats(),
         userCount,
         questionCount,
         orderCount,
@@ -275,6 +292,30 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ ok: true, data: { ok: true } });
   });
 
+  // 先完成 SQLite 在线备份，再原子清理；不重置序列，旧 JWT 不会绑定新用户。
+  let clearing = false;
+  app.delete('/api/admin/users', { preHandler: requireAdmin }, async (request, reply) => {
+    if ((request.body as { confirmation?: string } | undefined)?.confirmation !== '清空全部用户') return reply.code(400).send({ ok: false, error: '请确认清空全部用户' });
+    if (clearing) return reply.code(409).send({ ok: false, error: '正在清空，请稍候' });
+    clearing = true;
+    try {
+      const db = getDb();
+      const backupDir = join(dirname(db.name), 'backups');
+      mkdirSync(backupDir, { recursive: true, mode: 0o700 });
+      const backup = `before-user-reset-${Date.now()}-${randomUUID()}.db`;
+      await db.backup(join(backupDir, backup));
+      const deletedUsers = db.transaction(() => {
+        for (const table of ['daily_visits', 'ai_failures', 'exam_records', 'exam_sessions', 'chat_logs']) db.prepare(`DELETE FROM ${table}`).run();
+        // 收款金额保留，移除个人身份；已使用的激活码作废删除。
+        db.prepare("DELETE FROM vip_codes WHERE status='used' OR user_id IS NOT NULL").run();
+        db.prepare('UPDATE vip_codes SET device_id=NULL, wechat_id=NULL').run();
+        db.prepare('UPDATE orders SET user_id=NULL, wechat_id=NULL, trade_no=NULL').run();
+        return db.prepare('DELETE FROM users').run().changes;
+      })();
+      return { ok: true, data: { deletedUsers, backup } };
+    } finally { clearing = false; }
+  });
+
   // 用户分页列表（含考试次数、锁定状态）
   app.get('/api/admin/users', { preHandler: requireAdmin }, async (request, reply) => {
     const query = request.query as Record<string, unknown>;
@@ -282,6 +323,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const db = getDb();
 
     interface UserListRow {
+      public_id: string;
       id: number;
       phone: string | null;
       vip_activated_at: number | null;
@@ -294,7 +336,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const total = (db.prepare('SELECT COUNT(*) AS c FROM users').get() as { c: number }).c;
     const rows = db
       .prepare(
-        `SELECT u.id, u.phone, u.vip_activated_at, u.vip_code, u.free_used_count, u.created_at,
+        `SELECT u.id, u.public_id, u.phone, u.vip_activated_at, u.vip_code, u.free_used_count, u.created_at,
                 (SELECT COUNT(*) FROM exam_records e WHERE e.user_id = u.id) AS exam_count
          FROM users u
          ORDER BY u.created_at DESC
@@ -304,6 +346,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
 
     const list = rows.map((r) => ({
       id: r.id,
+      displayName: userDisplayName(r.public_id),
       phone: r.phone?.startsWith('guest_') ? null : r.phone,
       vipActivatedAt: r.vip_activated_at,
       vipCode: r.vip_code,
@@ -326,6 +369,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     interface OrderListRow {
       id: number;
       user_id: number;
+      user_public_id: string | null;
       user_phone: string | null;
       amount: number | null;
       trade_no: string | null;
@@ -340,7 +384,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       ? (db.prepare(countSql).get(status) as { c: number }).c
       : (db.prepare(countSql).get() as { c: number }).c;
 
-    const dataSql = `SELECT o.id, o.user_id, u.phone AS user_phone, o.amount, o.trade_no, o.wechat_id, o.status, o.created_at
+    const dataSql = `SELECT o.id, o.user_id, u.public_id AS user_public_id, u.phone AS user_phone, o.amount, o.trade_no, o.wechat_id, o.status, o.created_at
          FROM orders o
          LEFT JOIN users u ON u.id = o.user_id
          ${whereClause}
@@ -353,6 +397,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const list = rows.map((r) => ({
       id: r.id,
       userId: r.user_id,
+      userDisplayName: userDisplayName(r.user_public_id),
       userPhone: r.user_phone?.startsWith('guest_') ? null : r.user_phone,
       amount: r.amount,
       tradeNo: r.trade_no,
@@ -457,6 +502,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       code: string;
       status: string;
       user_id: number | null;
+      user_public_id: string | null;
       user_phone: string | null;
       order_id: number | null;
       wechat_id: string | null;
@@ -472,7 +518,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     ).c;
     const rows = db
       .prepare(
-        `SELECT v.code, v.status, v.user_id, u.phone AS user_phone, v.order_id, v.wechat_id, v.amount, v.sent_at, v.activated_at, v.created_at
+        `SELECT v.code, v.status, v.user_id, u.public_id AS user_public_id, u.phone AS user_phone, v.order_id, v.wechat_id, v.amount, v.sent_at, v.activated_at, v.created_at
          FROM vip_codes v
          LEFT JOIN users u ON u.id = v.user_id
          ${where}
@@ -485,6 +531,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       code: r.code,
       status: r.status,
       userId: r.user_id,
+      userDisplayName: userDisplayName(r.user_public_id),
       userPhone: r.user_phone?.startsWith('guest_') ? null : r.user_phone,
       orderId: r.order_id,
       wechatId: r.wechat_id,

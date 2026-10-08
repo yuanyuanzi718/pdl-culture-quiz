@@ -29,6 +29,7 @@ export const config = {
     apiKey: process.env.DEEPSEEK_API_KEY?.trim() || '',
     baseUrl: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
     model: process.env.DEEPSEEK_MODEL || '',
+    visionModel: process.env.DEEPSEEK_VISION_MODEL || 'deepseek-flash',
   },
   freeExamLimit: integer('FREE_EXAM_LIMIT', 3), // 免费答题次数（次）
   examQuestionsPerRound: integer('EXAM_QUESTIONS_PER_ROUND', 5, 1), // 每次答题题数（道）

@@ -26,3 +26,15 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* 页面顶部固定为实色，避免被透明或滤镜样式影响。 */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: #C8102E;
+  opacity: 1;
+  filter: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}

@@ -1,3 +1,4 @@
+import { userDisplayName } from '../services/user-name.js';
 // VIP 激活 / 解绑路由
 import type { FastifyInstance } from 'fastify';
 import getDb from '../db/index.js';
@@ -8,6 +9,7 @@ import type { User, VipActivatePayload } from '../types.js';
 
 // 用户行结构
 interface UserRow {
+  public_id: string;
   id: number;
   phone: string;
   device_id: string | null;
@@ -34,6 +36,7 @@ function isChatLocked(user: {
 function toUser(row: UserRow): User {
   return {
     id: row.id,
+    displayName: userDisplayName(row.public_id)!,
     deviceId: row.device_id,
     vipActivatedAt: row.vip_activated_at,
     vipCode: row.vip_code,

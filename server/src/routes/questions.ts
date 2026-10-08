@@ -17,12 +17,12 @@ interface QuestionRow {
   tags: string | null;
 }
 
-// 题型配比 4:4:2（单选:判断:多选），按每次答题题数换算，顺序固定
+// 题型配比 6:2:2（单选:判断:多选），按每次答题题数换算，顺序固定
 type ExamSlot = 'single' | 'judge' | 'multi';
 
 function examPlan(size: number): Array<{ type: ExamSlot; count: number }> {
-  const single = Math.round(size * 0.4);
-  const judge = Math.round(size * 0.4);
+  const single = Math.round(size * 0.6);
+  const judge = Math.round(size * 0.2);
   const plan: Array<{ type: ExamSlot; count: number }> = [
     { type: 'single', count: single },
     { type: 'judge', count: judge },
@@ -69,8 +69,19 @@ function pickByType(
   const all = db
     .prepare('SELECT * FROM questions WHERE type = ? ORDER BY RANDOM()')
     .all(type) as QuestionRow[];
-  const fresh = all.filter((r) => !excludeIds.has(r.id));
-  const used = all.filter((r) => excludeIds.has(r.id));
+  // 在原题库中优先抽辨析题：多于两个选项的单选、含干扰项的多选。
+  // 未做过的基础题仍优先于做过的辨析题，保持覆盖与不重复。
+  const discriminating = (r: QuestionRow): boolean => {
+    const options = JSON.parse(r.options) as string[];
+    if (r.type === 'single') return options.length > 2;
+    if (r.type === 'multi') return (JSON.parse(r.answer) as string[]).length < options.length;
+    return true;
+  };
+  const prioritize = (rows: QuestionRow[]) => [
+    ...rows.filter(discriminating), ...rows.filter(r => !discriminating(r)),
+  ];
+  const fresh = prioritize(all.filter((r) => !excludeIds.has(r.id)));
+  const used = prioritize(all.filter((r) => excludeIds.has(r.id)));
   // 优先未做过的，不足时用已做过的补足
   const picked = fresh.slice(0, n);
   if (picked.length < n) {
@@ -103,7 +114,7 @@ export async function questionRoutes(app: FastifyInstance): Promise<void> {
     const row = db.prepare('SELECT COUNT(*) as total FROM questions').get() as { total: number };
     return { ok: true, data: { total: row.total } };
   });
-  // 随机抽题（需 JWT）：按 4:4:2 配比发一套完整试卷，免费用户每套扣 1 次额度
+  // 随机抽题（需 JWT）：按 6:2:2 配比发一套完整试卷，免费用户每套扣 1 次额度
   app.get('/api/questions/random', { preHandler: requireAuth }, async (request, reply) => {
     const userId = request.user!.userId;
     const db = getDb();

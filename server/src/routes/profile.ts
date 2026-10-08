@@ -1,3 +1,4 @@
+import { createPublicId, userDisplayName } from '../services/user-name.js';
 // 用户资料路由：游客登录（基于设备）+ 查询个人资料
 import type { FastifyInstance } from 'fastify';
 import getDb from '../db/index.js';
@@ -7,6 +8,7 @@ import type { User } from '../types.js';
 
 // 用户行结构
 interface UserRow {
+  public_id: string;
   id: number;
   phone: string | null;
   device_id: string | null;
@@ -34,6 +36,7 @@ function isChatLocked(user: {
 function toUser(row: UserRow): User {
   return {
     id: row.id,
+    displayName: userDisplayName(row.public_id)!,
     deviceId: row.device_id,
     vipActivatedAt: row.vip_activated_at,
     vipCode: row.vip_code,
@@ -65,9 +68,9 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
 
     if (!user) {
       const insert = db.prepare(
-        `INSERT INTO users (phone, device_id, free_used_count, created_at) VALUES (?, ?, 0, ?)`
+        `INSERT INTO users (phone, device_id, public_id, free_used_count, created_at) VALUES (?, ?, ?, 0, ?)`
       );
-      const info = insert.run(null, deviceId, Date.now());
+      const info = insert.run(null, deviceId, createPublicId(db), Date.now());
       user = db.prepare('SELECT * FROM users WHERE id = ?').get(Number(info.lastInsertRowid)) as
         | UserRow
         | undefined;
@@ -79,6 +82,14 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
 
     const token = await signToken(user.id, user.phone);
     return reply.send({ ok: true, data: { user: toUser(user), token } });
+  });
+
+  app.post('/api/profile/visit', { preHandler: requireAuth }, async (request, reply) => {
+    const db = getDb();
+    if (!db.prepare('SELECT id FROM users WHERE id=?').get(request.user!.userId)) return reply.code(401).send({ ok: false, error: '请重新连接' });
+    db.prepare(`INSERT INTO daily_visits(day,user_id) VALUES (date(? / 1000,'unixepoch','+8 hours'),?)
+      ON CONFLICT(day,user_id) DO UPDATE SET visits=visits+1`).run(Date.now(), request.user!.userId);
+    return { ok: true, data: {} };
   });
 
   // 查询个人资料（需 JWT，只能查自己）

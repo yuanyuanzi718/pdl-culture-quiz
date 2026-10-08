@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Database as DatabaseType } from 'better-sqlite3';
+import { createPublicId } from '../services/user-name.js';
 import { importQuestionsFromJson } from './seed.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -26,6 +27,12 @@ export function getDb(): DatabaseType {
   // 开启 WAL 提升并发读性能
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
+
+  // 图片过期后可增量回收磁盘。旧库仅首次启用时重建，新库直接启用。
+  if (db.pragma('auto_vacuum', {simple:true}) !== 2) {
+    db.pragma('auto_vacuum = INCREMENTAL');
+    db.exec('VACUUM');
+  }
 
   // 执行建表 SQL
   const schema = readFileSync(SCHEMA_PATH, 'utf-8');
@@ -87,6 +94,8 @@ export function getDb(): DatabaseType {
   if (!chatCols.some((c) => c.name === 'references_json')) db.exec('ALTER TABLE chat_logs ADD COLUMN references_json TEXT');
   if (!chatCols.some((c) => c.name === 'kind')) db.exec("ALTER TABLE chat_logs ADD COLUMN kind TEXT NOT NULL DEFAULT 'chat'");
 
+  if (!chatCols.some((c) => c.name === 'image_data')) db.exec('ALTER TABLE chat_logs ADD COLUMN image_data TEXT');
+  if (!chatCols.some((c) => c.name === 'archived')) db.exec('ALTER TABLE chat_logs ADD COLUMN archived INTEGER NOT NULL DEFAULT 0');
   const orderCols = db.prepare("PRAGMA table_info('orders')").all() as Array<{ name: string; notnull: number }>;
   const orderColNames = new Set(orderCols.map((c) => c.name));
   if (!orderColNames.has('wechat_id')) {
@@ -94,13 +103,13 @@ export function getDb(): DatabaseType {
   }
   // 老库 amount 为 NOT NULL，改为可空（预生成码场景金额后补）
   const amountCol = orderCols.find((c) => c.name === 'amount');
-  if (amountCol?.notnull) {
+  if (amountCol?.notnull || orderCols.find(c => c.name === 'user_id')?.notnull) {
     db.pragma('foreign_keys = OFF');
     db.exec(`
       DROP TABLE IF EXISTS orders_new;
       CREATE TABLE orders_new (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
+        user_id INTEGER,
         amount REAL,
         trade_no TEXT,
         wechat_id TEXT,
@@ -109,7 +118,7 @@ export function getDb(): DatabaseType {
         FOREIGN KEY (user_id) REFERENCES users(id)
       );
       INSERT INTO orders_new (id, user_id, amount, trade_no, wechat_id, status, created_at)
-        SELECT id, user_id, amount, trade_no, NULL, status, created_at FROM orders;
+        SELECT id, user_id, amount, trade_no, wechat_id, status, created_at FROM orders;
       DROP TABLE orders;
       ALTER TABLE orders_new RENAME TO orders;
       CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
@@ -134,6 +143,15 @@ export function getDb(): DatabaseType {
   if (recalculated.changes > 0) {
     console.log(`[db] 已按「次」重算 ${recalculated.changes} 个用户的免费答题用量`);
   }
+
+  // 兼容旧用户：一次生成随机代号，此后保持不变。
+  const nameCols = db.prepare("PRAGMA table_info('users')").all() as Array<{name:string}>;
+  if (!nameCols.some(c => c.name === 'public_id')) db.exec('ALTER TABLE users ADD COLUMN public_id TEXT');
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS unique_user_public_id ON users(public_id)');
+  db.transaction(() => {
+    const unnamed = db.prepare('SELECT id FROM users WHERE public_id IS NULL').all() as Array<{id:number}>;
+    for (const user of unnamed) db.prepare('UPDATE users SET public_id=? WHERE id=?').run(createPublicId(db),user.id);
+  })();
 
   // 如果题目表为空，尝试从 JSON 导入
   const countRow = db.prepare('SELECT COUNT(*) as c FROM questions').get() as { c: number };

@@ -43,7 +43,7 @@ const FILTERS = [
 
 export default function AdminVipCodes() {
   const [wechatId, setWechatId] = useState('')
-  const [amount, setAmount] = useState('')
+  const [amount, setAmount] = useState('9.9')
   const [issuing, setIssuing] = useState(false)
   const [issueTip, setIssueTip] = useState('')
   const [lastCode, setLastCode] = useState('')
@@ -131,9 +131,9 @@ export default function AdminVipCodes() {
           }
           const result = await adminApi.issueCode(payload)
           setLastCode(result.code)
-          setIssueTip(trimmedWechat || trimmedAmount ? '已生成激活码并创建订单。' : '已生成并发放激活码，可复制后发送给用户。')
+          setIssueTip(trimmedWechat || trimmedAmount ? '已生成激活码并登记收款。' : '已生成并发放激活码，可复制后发送给用户。')
           setWechatId('')
-          setAmount('')
+          setAmount('9.9')
           load()
         } catch (error) {
           setIssueError(error instanceof Error ? error.message : '发码失败')
@@ -237,7 +237,7 @@ export default function AdminVipCodes() {
                     <span className={`rounded px-2 py-0.5 text-xs ${s.cls}`}>{s.text}</span>
                   </td>
                   <td data-label="领取用户" className="px-4 py-3 text-gray-700">
-                    {c.userPhone || (c.userId ? `用户#${c.userId}` : '—')}
+                    {c.userDisplayName || '—'}
                   </td>
                   <td data-label="微信号" className="px-4 py-3">
                     {isEditing ? (

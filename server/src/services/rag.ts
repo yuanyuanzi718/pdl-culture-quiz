@@ -7,6 +7,8 @@ const TOP_K = 2;
 // 题库行结构
 interface QuestionRow {
   id: number;
+  options: string;
+  answer: string;
   stem: string;
   explanation: string | null;
   source: string | null;
@@ -48,7 +50,7 @@ function jaccard(a: Set<string>, b: Set<string>): number {
 export function retrieve(message: string): RagResult {
   const db = getDb();
   const rows = db.prepare(
-    'SELECT id, stem, explanation, source FROM questions'
+    'SELECT id, stem, options, answer, explanation, source FROM questions'
   ).all() as QuestionRow[];
 
   if (rows.length === 0) {
@@ -63,7 +65,7 @@ export function retrieve(message: string): RagResult {
     return {
       row,
       score: jaccard(queryTokens, rowTokens),
-      text,
+      text: `${text}\n选项：${(JSON.parse(row.options) as string[]).map((option,i)=>`${String.fromCharCode(65+i)}. ${option}`).join('；')}\n题库参考答案：${row.answer}`,
     };
   });
 

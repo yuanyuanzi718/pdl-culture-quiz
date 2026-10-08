@@ -49,7 +49,7 @@ function AdminLogin() {
       <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-lg">
         <div className="mb-6 text-center">
           <div className="mb-2 text-3xl">🛠️</div>
-          <h1 className="text-lg font-semibold text-gray-900">胖东来文化评估 · 管理后台</h1>
+          <h1 className="text-lg font-semibold text-gray-900">东来研习 · 管理后台</h1>
           <p className="mt-1 text-xs text-gray-500">输入管理员令牌登录</p>
         </div>
         <input
@@ -83,7 +83,7 @@ function AdminLayout() {
     { to: '/admin/dashboard', label: '数据概览', icon: '📊' },
     { to: '/admin/questions', label: '题库管理', icon: '📚' },
     { to: '/admin/users', label: '用户管理', icon: '👥' },
-    { to: '/admin/orders', label: '订单管理', icon: '💰' },
+    { to: '/admin/orders', label: '收款记录', icon: '💰' },
     { to: '/admin/vip-codes', label: 'VIP 码', icon: '🎟️' },
   ]
 

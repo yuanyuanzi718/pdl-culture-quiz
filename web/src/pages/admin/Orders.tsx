@@ -68,8 +68,10 @@ export default function AdminOrders() {
   return (
     <div>
       <h1 className="mb-5 text-xl font-semibold text-gray-900">
-        订单管理 <span className="text-sm font-normal text-gray-400">共 {total} 单</span>
+        收款记录 <span className="text-sm font-normal text-gray-400">共 {total} 笔</span>
       </h1>
+      <p className="mb-4 text-sm text-gray-500">登记微信人工收款，方便核对金额和发码记录。这里不会自动收款。</p>
+
 
       <div className="admin-table-wrap overflow-hidden rounded-xl bg-white shadow-sm">
         <table className="admin-table w-full text-sm">
@@ -107,7 +109,7 @@ export default function AdminOrders() {
                 <tr key={o.id} className="hover:bg-gray-50">
                   <td data-label="ID" className="px-4 py-3 text-gray-400">{o.id}</td>
                   <td data-label="用户" className="px-4 py-3 text-gray-800">
-                    {o.userPhone || `用户#${o.userId}`}
+                    {o.userDisplayName || '未绑定用户'}
                   </td>
                   <td data-label="金额" className="px-4 py-3">
                     {isEditing ? (

@@ -10,6 +10,15 @@ export default function AdminUsers() {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [clearing, setClearing] = useState(false)
+  const [tip, setTip] = useState('')
+  const clear = async () => {
+    if (prompt('将清空全部用户、答题、对话和已激活会员，先自动备份。输入「清空全部用户」继续：') !== '清空全部用户') return
+    setClearing(true)
+    try { const result = await adminApi.clearUsers(); setTip(`已清空 ${result.deletedUsers} 位用户，备份已保存。`); setPage(1); load() }
+    catch (e) { setTip(e instanceof Error ? e.message : '清空失败') }
+    finally { setClearing(false) }
+  }
 
   const load = useCallback(() => {
     setLoading(true)
@@ -33,11 +42,12 @@ export default function AdminUsers() {
         用户管理 <span className="text-sm font-normal text-gray-400">共 {total} 人</span>
       </h1>
 
+      <button disabled={clearing || loading} onClick={clear} className="mb-4 rounded-lg border border-red-200 px-4 py-2 text-sm text-red-700 disabled:opacity-50">{clearing ? '正在备份并清空…' : '清空全部用户'}</button>
+      {tip && <p role="status" className="mb-4 text-sm text-gray-600">{tip}</p>}
       <div className="admin-table-wrap overflow-hidden rounded-xl bg-white shadow-sm">
         <table className="admin-table w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs text-gray-500">
             <tr>
-              <th className="px-4 py-3">ID</th>
               <th className="px-4 py-3">用户标识</th>
               <th className="px-4 py-3">VIP 状态</th>
               <th className="px-4 py-3">免费已用次数</th>
@@ -48,22 +58,21 @@ export default function AdminUsers() {
           <tbody className="divide-y divide-gray-100">
             {loading && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
                   加载中…
                 </td>
               </tr>
             )}
             {!loading && list.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
                   暂无用户
                 </td>
               </tr>
             )}
             {list.map((u) => (
               <tr key={u.id} className="hover:bg-gray-50">
-                <td data-label="ID" className="px-4 py-3 text-gray-400">{u.id}</td>
-                <td data-label="用户标识" className="px-4 py-3 font-medium text-gray-800">{u.phone || `用户 #${u.id}`}</td>
+                <td data-label="用户标识" className="px-4 py-3 font-medium text-gray-800">{u.displayName}</td>
                 <td data-label="VIP 状态" className="px-4 py-3">
                   {u.vipActivatedAt ? (
                     <span className="rounded bg-yellow-100 px-2 py-0.5 text-xs text-yellow-700">

@@ -2,6 +2,7 @@
 
 // 用户实体（API 响应格式，驼峰命名，与前端约定一致）
 export interface User {
+  displayName: string;
   id: number;
   deviceId: string | null;
   vipActivatedAt: number | null;
@@ -81,6 +82,7 @@ export interface ExamSubmitPayload {
 
 // 聊天负载
 export interface ChatPayload {
+  image?: string;
   userId: number;
   message: string;
 }

@@ -69,10 +69,10 @@ export default function WeChatContactModal({
         className="w-full max-w-xs rounded-3xl bg-white p-6 text-center shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="text-4xl">💬</div>
-        <p className="mt-2 text-base font-semibold text-gray-900">添加微信客服解锁</p>
+        <button onClick={onClose} aria-label="关闭" className="float-right text-gray-400">✕</button>
+        <p className="mt-2 text-base font-semibold text-gray-900">解锁会员 ¥9.9</p>
         <p className="mt-1 text-xs text-gray-500">
-          加好友转账 ¥9.9，客服会在微信上发送 VIP 激活码
+          添加微信付款，获取激活码
         </p>
 
         {/* 微信号展示 + 一键复制 */}
@@ -91,19 +91,11 @@ export default function WeChatContactModal({
           </button>
         </div>
 
-        {/* 操作指引 */}
-        <div className="mt-4 space-y-1.5 text-left text-xs text-gray-600">
-          <p>1. 复制上方微信号，在微信搜索添加好友</p>
-          <p>2. 转账 ¥9.9 给客服</p>
-          <p>3. 客服发送 VIP 激活码</p>
-          <p>4. 返回本页输入激活码完成解锁</p>
-        </div>
-
         <button
           onClick={goToActivation}
           className="mt-5 w-full rounded-full bg-gray-100 py-2.5 text-sm font-medium text-gray-600 active:scale-95"
         >
-          我已加好友，去输入激活码
+          已有激活码
         </button>
       </div>
     </div>

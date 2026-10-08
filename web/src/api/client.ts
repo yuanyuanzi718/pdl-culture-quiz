@@ -46,6 +46,7 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
 
 // API 聚合
 export const api = {
+  visit: () => request('/profile/visit', { method: 'POST', body: '{}' }),
   // 游客登录（基于设备）：POST /profile/guest → { user, token }
   // 同设备复用同一用户，保留免费额度/VIP 状态
   guestLogin: () =>
@@ -86,10 +87,11 @@ export const api = {
     return data?.records ?? []
   },
 
-  chatHistory: async () => (await request<{ messages: Array<{ role: string; content: string; references: Array<{text:string;source:string}> }> }>('/chat/history')).messages,
+  newChat: () => request<{started:boolean}>('/chat/new', {method:'POST',body:'{}'}),
+  chatHistory: async () => (await request<{ messages: Array<{ role: string; content: string; image?: string; references: Array<{text:string;source:string}> }> }>('/chat/history')).messages,
   pendingExam: async () => (await request<{ questions: Question[] }>('/questions/pending')).questions,
   // AI 对话：POST /chat → { reply, references }
-  chat: (payload: { userId: number; message: string }) =>
+  chat: (payload: { userId: number; message: string; image?: string }) =>
     request<ChatReply>('/chat', {
       method: 'POST',
       body: JSON.stringify(payload),

@@ -93,7 +93,7 @@ export default function Profile() {
             {activated ? 'VIP 会员' : '免费用户'}
           </p>
           <p className="text-xs text-gray-400">
-            用户编号 {user.id} · {activated ? `激活码 ${user.vipCode}` : '未激活 VIP'}
+            {user.displayName || '研习者'} · {activated ? `激活码 ${user.vipCode}` : '未激活 VIP'}
           </p>
         </div>
       </div>
@@ -189,10 +189,7 @@ export default function Profile() {
           {/* 解锁区：未激活时展示，引导加微信客服人工转账 */}
           <div className="mt-3 rounded-2xl bg-gradient-to-br from-primary to-red-700 p-5 text-center text-white shadow-sm">
             <p className="text-sm">解锁全部功能</p>
-            <p className="my-1 text-xs text-white/80">无限刷题 · AI 对话 · 完整解析</p>
-            <p className="mb-3 text-xs text-white/70">
-              💡 AI 对话和服务器都要花钱，收点费用才能持续运营，感谢理解 🙏
-            </p>
+            <p className="my-1 text-xs text-white/80">刷题 · AI 对话 · 完整解析</p>
             <button
               onClick={() => setShowWeChat(true)}
               className="w-full rounded-full bg-white py-2.5 text-sm font-bold text-primary"

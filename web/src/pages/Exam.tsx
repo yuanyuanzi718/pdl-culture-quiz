@@ -47,6 +47,7 @@ export default function Exam() {
       setQuestions(list); setPhase('exam')
       try {
         const draft = JSON.parse(sessionStorage.getItem(draftKey) || '{}')
+        if (draft.paused) setPhase('idle')
         if (JSON.stringify(draft.ids) === JSON.stringify(list.map((q) => q.id))) {
           setAnswers(draft.answers || {}); setIdx(Math.min(draft.idx || 0, list.length - 1))
         }
@@ -58,11 +59,17 @@ export default function Exam() {
   useEffect(() => {
     if (phase === 'exam') sessionStorage.setItem(draftKey, JSON.stringify({ ids: questions.map((q) => q.id), answers, idx }))
   }, [draftKey, phase, questions, answers, idx])
+  const hasPending = questions.length > 0 && result === null
   const locked = !!user?.isLocked
+  const returnHome = () => {
+    sessionStorage.setItem(draftKey, JSON.stringify({ids:questions.map(q=>q.id),answers,idx,paused:true}))
+    setErr(''); setPhase('idle')
+  }
 
   // 抽题开始考试
   const start = async () => {
     if (!user) return
+    if (hasPending) { setErr(''); setPhase('exam'); return }
     if (locked) return
     setLoading(true)
     setErr('')
@@ -166,6 +173,11 @@ export default function Exam() {
       q.type === 'multi' ? Array.isArray(val) && val.length >= 2 : val != null && val !== ''
     return (
       <div className="relative flex h-full flex-col">
+        <div className="shrink-0 bg-white px-4 pt-2">
+          <button onClick={returnHome} disabled={loading} className="flex min-h-9 items-center gap-1 text-sm text-gray-600 disabled:opacity-40">
+            <span aria-hidden="true">‹</span> 返回评估首页
+          </button>
+        </div>
         {/* 进度条 */}
         <div className="shrink-0 bg-white px-4 pb-2 pt-3">
           <div className="mb-1 flex justify-between text-xs text-gray-500">
@@ -257,10 +269,11 @@ export default function Exam() {
         disabled={loading}
         className="w-full max-w-xs rounded-full bg-primary px-8 py-3 text-base font-semibold text-white shadow-lg disabled:opacity-60"
       >
-        {loading ? '抽题中…' : '开始考试'}
+        {loading ? '抽题中…' : hasPending ? '继续考试' : '开始考试'}
       </button>
+      {hasPending && <p className="mt-3 text-xs text-gray-500">答题进度已保留，可随时继续</p>}
       {err && <p className="mt-4 text-xs text-primary">{err}</p>}
-      {locked && <LockOverlay />}
+      {locked && !hasPending && <LockOverlay />}
     </div>
   )
 }

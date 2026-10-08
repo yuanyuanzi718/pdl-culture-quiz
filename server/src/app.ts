@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
+import { cleanExpiredImages, IMAGE_CLEANUP_INTERVAL_MS } from './services/image-retention.js';
 import getDb from './db/index.js';
 import { profileRoutes } from './routes/profile.js';
 import { questionRoutes } from './routes/questions.js';
@@ -12,6 +13,14 @@ import { adminRoutes } from './routes/admin.js';
 export async function buildApp(logger = false) {
   const app = Fastify({ logger, bodyLimit: 64 * 1024, trustProxy: ['127.0.0.1', '::1', '172.16.0.0/12'] });
   getDb();
+  const cleanup = () => {
+    try { const count=cleanExpiredImages(); if(count) app.log.info({count},'已清理过期聊天图片'); }
+    catch(error) { app.log.error({err:error},'聊天图片清理失败'); }
+  };
+  cleanup();
+  const imageCleanupTimer = setInterval(cleanup, IMAGE_CLEANUP_INTERVAL_MS);
+  imageCleanupTimer.unref();
+  app.addHook('onClose', async () => { clearInterval(imageCleanupTimer); });
   await app.register(cors, { origin: ['http://localhost:5173'], credentials: true });
   await app.register(rateLimit, {
     max: 120,

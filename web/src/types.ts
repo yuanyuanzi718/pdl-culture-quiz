@@ -26,6 +26,7 @@ export interface Detail {
 
 // 用户（字段驼峰命名，与后端约定一致）
 export interface User {
+  displayName: string
   id: number
   deviceId: string | null
   vipActivatedAt: number | null

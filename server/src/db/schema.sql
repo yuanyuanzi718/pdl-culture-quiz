@@ -2,6 +2,7 @@
 
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  public_id TEXT,                    -- 持久化随机代号，与注册顺序无关
   phone TEXT UNIQUE,                  -- 兼容历史字段，匿名用户不生成虚构手机号
   device_id TEXT UNIQUE,              -- 设备唯一标识（前端 localStorage UUID）
   vip_activated_at INTEGER,          -- null 表示未激活
@@ -38,6 +39,8 @@ CREATE TABLE IF NOT EXISTS chat_logs (
   role TEXT NOT NULL,                -- 'user'|'assistant'
   content TEXT NOT NULL,
   created_at INTEGER NOT NULL,
+  image_data TEXT,
+  archived INTEGER NOT NULL DEFAULT 0,
   kind TEXT NOT NULL DEFAULT 'chat', -- 'chat' 正常对话 | 'preset' 预设引导（不计每日上限）
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
@@ -58,7 +61,7 @@ CREATE TABLE IF NOT EXISTS vip_codes (
 
 CREATE TABLE IF NOT EXISTS orders (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL,
+  user_id INTEGER,
   amount REAL,
   trade_no TEXT,
   wechat_id TEXT,
@@ -82,3 +85,19 @@ CREATE TABLE IF NOT EXISTS exam_sessions (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS one_pending_exam ON exam_sessions(user_id) WHERE submitted_at IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS unique_order_reference ON orders(trade_no) WHERE trade_no IS NOT NULL;
+
+-- 上海自然日访问；同设备每天一条，后台不计入
+CREATE TABLE IF NOT EXISTS daily_visits (
+  day TEXT NOT NULL,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  visits INTEGER NOT NULL DEFAULT 1,
+  PRIMARY KEY (day, user_id)
+);
+CREATE TABLE IF NOT EXISTS ai_failures (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+INSERT OR IGNORE INTO app_meta(key,value) VALUES ('analytics_started',date('now','+8 hours'));

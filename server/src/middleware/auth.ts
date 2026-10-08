@@ -2,6 +2,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { jwtVerify, SignJWT } from 'jose';
 import { config } from '../config.js';
+import getDb from '../db/index.js';
 import type { JwtPayload } from '../types.js';
 
 const encoder = new TextEncoder();
@@ -47,6 +48,11 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply):
   const user = await extractUser(request);
   if (!user) {
     reply.code(401).send({ ok: false, error: '未授权或登录已过期' });
+    return;
+  }
+  // 清空用户后立即拒绝旧令牌，避免旧设备访问已删除的数据。
+  if (!getDb().prepare('SELECT id FROM users WHERE id=?').get(user.userId)) {
+    reply.code(401).send({ ok: false, error: '登录已过期，请重新连接' });
     return;
   }
   request.user = user;

@@ -39,7 +39,21 @@ export async function adminRequest<T>(path: string, options: RequestInit = {}): 
 }
 
 // ---- 类型定义（与后端 admin 路由输出一致）----
+export interface DailyUsage {
+  day: string
+  visitors: number
+  newUsers: number
+  examUsers: number
+  exams: number
+  chatUsers: number
+  chats: number
+  aiFailures: number
+  activations: number
+}
 export interface AdminStats {
+  trackingSince: string
+  daily: DailyUsage[]
+  today: DailyUsage
   userCount: number
   questionCount: number
   orderCount: number
@@ -68,6 +82,7 @@ export interface Paged<T> {
 }
 
 export interface AdminUser {
+  displayName: string
   id: number
   phone: string | null
   vipActivatedAt: number | null
@@ -81,6 +96,7 @@ export interface AdminUser {
 export interface AdminOrder {
   id: number
   userId: number
+  userDisplayName: string | null
   userPhone: string | null
   amount: number | null
   tradeNo: string | null
@@ -93,6 +109,7 @@ export interface AdminVipCode {
   code: string
   status: 'available' | 'sent' | 'used'
   userId: number | null
+  userDisplayName: string | null
   userPhone: string | null
   orderId: number | null
   wechatId: string | null
@@ -116,6 +133,7 @@ export interface QuestionPayload {
 // ---- API 聚合 ----
 export const adminApi = {
   issueCode: (payload: { wechatId?: string; amount?: number }) => adminRequest<{ code: string }>('/admin/vip-codes/issue', { method: 'POST', body: JSON.stringify(payload) }),
+  clearUsers: () => adminRequest<{ deletedUsers: number; backup: string }>('/admin/users', { method: 'DELETE', body: JSON.stringify({ confirmation: '清空全部用户' }) }),
   getStats: () => adminRequest<AdminStats>('/admin/stats'),
 
   listQuestions: (params: { page: number; size: number; keyword?: string }) => {
