@@ -368,7 +368,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
 
     interface OrderListRow {
       id: number;
-      user_id: number;
+      user_id: number | null;
       user_public_id: string | null;
       user_phone: string | null;
       amount: number | null;
@@ -376,6 +376,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       wechat_id: string | null;
       status: string;
       created_at: number;
+      vip_code: string | null;
     }
 
     const whereClause = status ? 'WHERE o.status = ?' : '';
@@ -384,9 +385,12 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       ? (db.prepare(countSql).get(status) as { c: number }).c
       : (db.prepare(countSql).get() as { c: number }).c;
 
-    const dataSql = `SELECT o.id, o.user_id, u.public_id AS user_public_id, u.phone AS user_phone, o.amount, o.trade_no, o.wechat_id, o.status, o.created_at
+    const dataSql = `SELECT o.id, o.user_id, u.public_id AS user_public_id, u.phone AS user_phone,
+                            o.amount, o.trade_no, o.wechat_id, o.status, o.created_at,
+                            v.code AS vip_code
          FROM orders o
          LEFT JOIN users u ON u.id = o.user_id
+         LEFT JOIN vip_codes v ON v.order_id = o.id
          ${whereClause}
          ORDER BY o.created_at DESC
          LIMIT ? OFFSET ?`;
@@ -404,6 +408,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       wechatId: r.wechat_id,
       status: r.status,
       createdAt: r.created_at,
+      vipCode: r.vip_code,
     }));
 
     return reply.send({ ok: true, data: { list, total, page, size } });
@@ -441,7 +446,25 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     if (updates.length === 0) return reply.code(400).send({ ok: false, error: '没有需要更新的字段' });
 
     sqlParams.push(id);
-    db.prepare(`UPDATE orders SET ${updates.join(', ')} WHERE id=?`).run(...sqlParams);
+    const update = db.transaction(() => {
+      db.prepare(`UPDATE orders SET ${updates.join(', ')} WHERE id=?`).run(...sqlParams);
+      // 同步更新关联 vip_codes 的 wechat_id / amount
+      const vipUpdates: string[] = [];
+      const vipParams: unknown[] = [];
+      if (body.wechatId !== undefined) {
+        vipUpdates.push('wechat_id=?');
+        vipParams.push(typeof body.wechatId === 'string' ? body.wechatId.trim() : null);
+      }
+      if (body.amount !== undefined) {
+        vipUpdates.push('amount=?');
+        vipParams.push(body.amount);
+      }
+      if (vipUpdates.length > 0) {
+        vipParams.push(id);
+        db.prepare(`UPDATE vip_codes SET ${vipUpdates.join(', ')} WHERE order_id=?`).run(...vipParams);
+      }
+    });
+    update();
     return reply.send({ ok: true });
   });
 

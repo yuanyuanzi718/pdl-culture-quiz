@@ -36,7 +36,6 @@ const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
 
 const FILTERS = [
   { value: '', label: '全部' },
-  { value: 'available', label: '未发放' },
   { value: 'sent', label: '已发放' },
   { value: 'used', label: '已使用' },
 ]
@@ -166,7 +165,7 @@ export default function AdminVipCodes() {
 
       {copyError && <p role="status" className="mb-3 text-sm text-amber-700">{copyError}</p>}
 
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+      <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
         {FILTERS.map((f) => (
           <button
             key={f.value}
@@ -174,7 +173,7 @@ export default function AdminVipCodes() {
               setPage(1)
               setStatus(f.value)
             }}
-            className={`w-full rounded-lg px-4 py-1.5 text-center text-sm sm:w-auto ${
+            className={`shrink-0 rounded-lg px-4 py-1.5 text-sm ${
               status === f.value ? 'bg-primary text-white' : 'border border-gray-300 bg-white text-gray-700'
             }`}
           >
@@ -225,8 +224,8 @@ export default function AdminVipCodes() {
                       <button
                         type="button"
                         onClick={() => copyCode(c.code)}
-                        className={`rounded px-2 py-0.5 text-xs text-white active:scale-95 ${
-                          copiedCode === c.code ? 'bg-green-500' : 'bg-gray-400 hover:bg-gray-500'
+                        className={`rounded px-2 py-0.5 text-xs leading-none text-white active:scale-95 admin-table-copy-btn ${
+                          copiedCode === c.code ? 'bg-green-500' : 'bg-primary hover:opacity-90'
                         }`}
                       >
                         {copiedCode === c.code ? '✓' : '复制'}

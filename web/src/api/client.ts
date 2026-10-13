@@ -81,7 +81,7 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
-  // 历史考试记录：GET /exam/records/:userId → { records: ExamRecord[] }
+  // 历史考试记录：GET /exam/records/:userId → { records: ExamRecord[] }（最近 10 次，带题目详情）
   examRecords: async (userId: number): Promise<ExamRecord[]> => {
     const data = await request<{ records: ExamRecord[] }>(`/exam/records/${userId}`)
     return data?.records ?? []

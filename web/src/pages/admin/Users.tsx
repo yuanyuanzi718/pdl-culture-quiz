@@ -4,6 +4,9 @@ import { fmtTime } from './AdminApp'
 import { Pager } from './ui'
 
 const PAGE_SIZE = 20
+// ⚠️ 生产环境禁用"清空全部用户"：已有真实付费用户，此功能仅内部测试用过，
+//    后端路由仍保留但前端不暴露。如需清理请直接操作数据库 + 备份。
+const ALLOW_CLEAR_USERS = false
 
 export default function AdminUsers() {
   const [list, setList] = useState<AdminUser[]>([])
@@ -13,6 +16,7 @@ export default function AdminUsers() {
   const [clearing, setClearing] = useState(false)
   const [tip, setTip] = useState('')
   const clear = async () => {
+    if (!ALLOW_CLEAR_USERS) return
     if (prompt('将清空全部用户、答题、对话和已激活会员，先自动备份。输入「清空全部用户」继续：') !== '清空全部用户') return
     setClearing(true)
     try { const result = await adminApi.clearUsers(); setTip(`已清空 ${result.deletedUsers} 位用户，备份已保存。`); setPage(1); load() }
@@ -42,7 +46,9 @@ export default function AdminUsers() {
         用户管理 <span className="text-sm font-normal text-gray-400">共 {total} 人</span>
       </h1>
 
-      <button disabled={clearing || loading} onClick={clear} className="mb-4 rounded-lg border border-red-200 px-4 py-2 text-sm text-red-700 disabled:opacity-50">{clearing ? '正在备份并清空…' : '清空全部用户'}</button>
+      {ALLOW_CLEAR_USERS && (
+        <button disabled={clearing || loading} onClick={clear} className="mb-4 rounded-lg border border-red-200 px-4 py-2 text-sm text-red-700 disabled:opacity-50">{clearing ? '正在备份并清空…' : '清空全部用户'}</button>
+      )}
       {tip && <p role="status" className="mb-4 text-sm text-gray-600">{tip}</p>}
       <div className="admin-table-wrap overflow-hidden rounded-xl bg-white shadow-sm">
         <table className="admin-table w-full text-sm">

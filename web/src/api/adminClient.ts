@@ -103,6 +103,7 @@ export interface AdminOrder {
   wechatId: string | null
   status: 'pending' | 'paid' | 'failed'
   createdAt: number
+  vipCode: string | null
 }
 
 export interface AdminVipCode {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { useUserStore } from '../store/user'
-import type { ExamRecord } from '../types'
+import type { ExamDetailItem, ExamRecord } from '../types'
 import WeChatContactModal from '../components/WeChatContactModal'
 
 // 时间戳格式化：MM-DD HH:mm
@@ -9,6 +9,74 @@ function fmtTime(ts: number): string {
   const d = new Date(ts)
   const p = (n: number) => String(n).padStart(2, '0')
   return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+// 用户答案转字母显示
+function fmtUserAnswer(raw: string, _correct: string | string[], type: string, options: string[]): string {
+  if (type === 'multi') {
+    try {
+      const arr: string[] = JSON.parse(raw)
+      return arr.map((v) => toLetter(v, options)).join('')
+    } catch {
+      return raw || '未作答'
+    }
+  }
+  return raw ? toLetter(raw, options) : '未作答'
+}
+
+function toLetter(value: string, options: string[]): string {
+  if (!value) return ''
+  if (/^[A-Za-z]$/.test(value)) return value.toUpperCase()
+  const idx = options.indexOf(value)
+  return idx >= 0 ? String.fromCharCode(65 + idx) : value.toUpperCase()
+}
+
+// 渲染每题详情
+function QuestionDetail({ d }: { d: ExamDetailItem }) {
+  const correctArr = Array.isArray(d.correctAnswer) ? d.correctAnswer : [d.correctAnswer]
+  const userLetter = fmtUserAnswer(d.userAnswer, d.correctAnswer, d.type, d.options)
+  const correctLetter = correctArr.join('')
+
+  return (
+    <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+      <div className="flex items-start gap-2 text-sm">
+        <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+          d.type === 'single' ? 'bg-blue-100 text-blue-700' :
+          d.type === 'multi' ? 'bg-purple-100 text-purple-700' :
+          'bg-amber-100 text-amber-700'
+        }`}>
+          {d.type === 'single' ? '单选' : d.type === 'multi' ? '多选' : '判断'}
+        </span>
+        <span className="flex-1 leading-relaxed text-gray-800">{d.stem}</span>
+        <span className={`shrink-0 text-xs font-semibold ${d.correct ? 'text-green-600' : 'text-red-500'}`}>
+          {d.correct ? '✓ 对' : '✗ 错'}
+        </span>
+      </div>
+      <div className="mt-2 space-y-1.5 text-xs">
+        {d.options.map((opt, i) => {
+          const letter = String.fromCharCode(65 + i)
+          const isCorrect = correctArr.includes(letter)
+          return (
+            <div key={i} className={`flex items-start gap-2 rounded px-2 py-1 ${
+              isCorrect ? 'bg-green-50' : ''
+            }`}>
+              <span className={`shrink-0 font-semibold ${isCorrect ? 'text-green-600' : 'text-gray-400'}`}>{letter}.</span>
+              <span className={isCorrect ? 'text-green-700' : 'text-gray-600'}>{opt}</span>
+            </div>
+          )
+        })}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+        <span className="text-green-600">正确答案：{correctLetter}</span>
+        <span className={d.correct ? 'text-gray-500' : 'text-red-500'}>你的答案：{userLetter}</span>
+      </div>
+      {d.explanation && (
+        <div className="mt-2 rounded bg-blue-50 p-2 text-[11px] text-gray-600">
+          <span className="font-semibold text-blue-600">解析：</span>{d.explanation}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function Profile() {
@@ -23,6 +91,7 @@ export default function Profile() {
   const [loading, setLoading] = useState<'vip' | 'unbind' | null>(null)
   const [records, setRecords] = useState<ExamRecord[]>([])
   const [showWeChat, setShowWeChat] = useState(false)
+  const [openRecordId, setOpenRecordId] = useState<number | null>(null)
 
   // 拉取后端模考历史
   useEffect(() => {
@@ -114,39 +183,49 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* 模考历史（来自后端） */}
+      {/* 考试记录：最近 10 次，按试卷展开 */}
       <div className="mt-3 rounded-2xl bg-white p-4 shadow-sm">
-        <p className="mb-3 text-sm font-semibold text-gray-800">模考历史</p>
-        <div className="flex justify-around text-center">
-          <div>
-            <p className="text-2xl font-bold text-primary">{maxScore}</p>
-            <p className="text-xs text-gray-400">最高分</p>
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-gray-700">{totalExams}</p>
-            <p className="text-xs text-gray-400">累计次数</p>
-          </div>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm font-semibold text-gray-800">考试记录</p>
+          <span className="text-xs text-gray-400">最近 {totalExams} 次 · 最高 {maxScore} 分</span>
         </div>
-        {historyError && <p role="alert" className="text-sm text-red-600">{historyError}</p>}
-        {records.length > 0 && (
-          <div className="mt-3 border-t border-gray-100 pt-3">
-            <p className="mb-2 text-xs text-gray-400">最近成绩</p>
-            <div className="space-y-1.5">
-              {records.slice(0, 5).map((r) => (
-                <div key={r.id} className="flex items-center justify-between text-xs">
-                  <span className="text-gray-500">{fmtTime(r.createdAt)}</span>
-                  <span
-                    className={`font-semibold ${
-                      r.score >= 60 ? 'text-primary' : 'text-gray-500'
-                    }`}
-                  >
-                    {r.score} 分
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+        {historyError && <p role="alert" className="mb-2 text-sm text-red-600">{historyError}</p>}
+        {records.length === 0 && !historyError && (
+          <p className="py-4 text-center text-sm text-gray-400">还没有答题记录</p>
         )}
+        <div className="space-y-2">
+          {records.map((r) => {
+            const open = openRecordId === r.id
+            return (
+              <div key={r.id} className="overflow-hidden rounded-xl border border-gray-100">
+                <button
+                  onClick={() => setOpenRecordId(open ? null : r.id)}
+                  className="flex w-full items-center justify-between px-3 py-2.5 text-left hover:bg-gray-50"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`text-lg font-bold ${
+                      r.score >= 80 ? 'text-green-600' : r.score >= 60 ? 'text-primary' : 'text-red-500'
+                    }`}>{r.score}</span>
+                    <span className="text-xs text-gray-400">
+                      {r.correctCount}/{r.total} 对 · 错 {r.wrongCount}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400">{fmtTime(r.createdAt)}</span>
+                    <span className={`text-xs ${open ? 'text-gray-400' : 'text-gray-300'}`}>{open ? '▲' : '▼'}</span>
+                  </div>
+                </button>
+                {open && (
+                  <div className="space-y-2 border-t border-gray-100 bg-gray-50 p-3">
+                    {r.details.map((d) => (
+                      <QuestionDetail key={d.questionId} d={d} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       {/* VIP 区域：已激活显示解绑，未激活显示激活码输入 + 支付 */}

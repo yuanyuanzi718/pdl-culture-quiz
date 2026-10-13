@@ -168,9 +168,10 @@ export async function examRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(403).send({ ok: false, error: '无权访问他人记录' });
     }
     const db = getDb();
+    // 只保留最近 10 次答题，更早的不再返回
     const rows = db
       .prepare(
-        'SELECT id, user_id, score, question_ids, answers, created_at FROM exam_records WHERE user_id = ? ORDER BY created_at DESC'
+        'SELECT id, user_id, score, question_ids, answers, created_at FROM exam_records WHERE user_id = ? ORDER BY created_at DESC LIMIT 10'
       )
       .all(userId) as Array<{
       id: number;
@@ -181,15 +182,157 @@ export async function examRoutes(app: FastifyInstance): Promise<void> {
       created_at: number;
     }>;
 
-    const records = rows.map((r) => ({
-      id: r.id,
-      userId: r.user_id,
-      score: r.score,
-      questionIds: JSON.parse(r.question_ids) as number[],
-      answers: JSON.parse(r.answers) as Record<string, string>,
-      createdAt: r.created_at,
-    }));
+    // 收集所有题目 ID，批量查题目详情
+    const allIds = new Set<number>();
+    const parsed: Array<{ id: number; score: number; qids: number[]; answers: Record<string, string>; createdAt: number }> = [];
+    for (const r of rows) {
+      const qids = JSON.parse(r.question_ids) as number[];
+      const ans = JSON.parse(r.answers) as Record<string, string>;
+      qids.forEach((id) => allIds.add(id));
+      parsed.push({ id: r.id, score: r.score, qids, answers: ans, createdAt: r.created_at });
+    }
+
+    let qMap = new Map<number, { id: number; type: string; stem: string; options: string; answer: string; explanation: string | null }>();
+    if (allIds.size > 0) {
+      const idList = [...allIds];
+      const placeholders = idList.map(() => '?').join(',');
+      const qRows = db
+        .prepare(`SELECT id, type, stem, options, answer, explanation FROM questions WHERE id IN (${placeholders})`)
+        .all(...idList) as Array<{ id: number; type: string; stem: string; options: string; answer: string; explanation: string | null }>;
+      qMap = new Map(qRows.map((q) => [q.id, q]));
+    }
+
+    const records = parsed.map((r) => {
+      const details = r.qids.map((qid) => {
+        const q = qMap.get(qid);
+        if (!q) return null;
+        const rawAnswer = r.answers[String(qid)] ?? '';
+        const userAnswerStr = Array.isArray(rawAnswer) ? JSON.stringify(rawAnswer) : String(rawAnswer);
+        const options = JSON.parse(q.options) as string[];
+        const correct = isCorrect(userAnswerStr, q.answer, q.type, options);
+        return {
+          questionId: qid,
+          type: q.type,
+          stem: q.stem,
+          options,
+          correctAnswer: q.type === 'multi' ? (JSON.parse(q.answer) as string[]) : q.answer,
+          userAnswer: userAnswerStr,
+          correct,
+          explanation: q.explanation,
+        };
+      }).filter((d): d is NonNullable<typeof d> => d !== null);
+
+      // 每题算对错，统计本卷错题数
+      const wrongCount = details.filter((d) => !d.correct).length;
+
+      return {
+        id: r.id,
+        score: r.score,
+        wrongCount,
+        correctCount: details.length - wrongCount,
+        total: details.length,
+        createdAt: r.createdAt,
+        details,
+      };
+    });
 
     return reply.send({ ok: true, data: { records } });
+  });
+
+  // 错题本：聚合用户历史交卷中的错题，按错误频次排序
+  app.get('/api/exam/wrongs', { preHandler: requireAuth }, async (request, reply) => {
+    const userId = request.user!.userId;
+    const db = getDb();
+
+    // 1. 拉取所有考试记录
+    const records = db
+      .prepare('SELECT question_ids, answers, created_at FROM exam_records WHERE user_id = ? ORDER BY created_at ASC')
+      .all(userId) as Array<{ question_ids: string; answers: string; created_at: number }>;
+
+    if (!records.length) {
+      return reply.send({ ok: true, data: { wrongs: [] } });
+    }
+
+    // 2. 收集所有出现过的题目 ID，批量查题目
+    const allIds = new Set<number>();
+    for (const r of records) {
+      try { JSON.parse(r.question_ids).forEach((id: number) => allIds.add(id)); } catch { /* */ }
+    }
+    if (!allIds.size) {
+      return reply.send({ ok: true, data: { wrongs: [] } });
+    }
+
+    const idList = [...allIds];
+    const placeholders = idList.map(() => '?').join(',');
+    const qRows = db
+      .prepare(`SELECT id, type, stem, options, answer, explanation FROM questions WHERE id IN (${placeholders})`)
+      .all(...idList) as Array<{ id: number; type: string; stem: string; options: string; answer: string; explanation: string | null }>;
+    const qMap = new Map(qRows.map((q) => [q.id, q]));
+
+    // 3. 逐题比对，统计错题（去重 + 频次）
+    // key: questionId, value: { question, wrongCount, lastWrongAt, userAnswers: Set, correctAnswer }
+    const wrongMap = new Map<number, {
+      questionId: number;
+      type: string;
+      stem: string;
+      options: string[];
+      explanation: string | null;
+      correctAnswer: string | string[];
+      wrongCount: number;
+      lastWrongAt: number;
+      userAnswers: string[];
+    }>();
+
+    for (const r of records) {
+      let qids: number[];
+      let answers: Record<string, string | string[]>;
+      try {
+        qids = JSON.parse(r.question_ids);
+        answers = JSON.parse(r.answers);
+      } catch { continue; }
+
+      for (const qid of qids) {
+        const q = qMap.get(qid);
+        if (!q) continue;
+        const rawAnswer = answers[String(qid)] ?? '';
+        const userAnswerStr = Array.isArray(rawAnswer) ? JSON.stringify(rawAnswer) : String(rawAnswer);
+        const options = JSON.parse(q.options) as string[];
+        const correct = isCorrect(userAnswerStr, q.answer, q.type, options);
+        if (!correct) {
+          let entry = wrongMap.get(qid);
+          if (!entry) {
+            const correctAnswer = q.type === 'multi'
+              ? (JSON.parse(q.answer) as string[])
+              : q.answer;
+            entry = {
+              questionId: qid,
+              type: q.type,
+              stem: q.stem,
+              options,
+              explanation: q.explanation,
+              correctAnswer,
+              wrongCount: 0,
+              lastWrongAt: 0,
+              userAnswers: [],
+            };
+            wrongMap.set(qid, entry);
+          }
+          entry.wrongCount++;
+          if (r.created_at > entry.lastWrongAt) entry.lastWrongAt = r.created_at;
+          // 记录用户的错误答案（去重）
+          const letterAns = q.type === 'multi'
+            ? userAnswerStr
+            : toLetter(userAnswerStr, options);
+          if (!entry.userAnswers.includes(letterAns)) entry.userAnswers.push(letterAns);
+        }
+      }
+    }
+
+    // 4. 按错误频次降序，同频次按最近错误时间降序
+    const wrongs = Array.from(wrongMap.values()).sort((a, b) =>
+      b.wrongCount - a.wrongCount || b.lastWrongAt - a.lastWrongAt
+    );
+
+    return reply.send({ ok: true, data: { wrongs } });
   });
 }

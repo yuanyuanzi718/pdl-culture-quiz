@@ -57,12 +57,24 @@ export interface ExamResult {
   details: Detail[]
 }
 
-// 历史考试记录（GET /exam/records）
+// 历史考试记录（GET /exam/records，最近 10 次）
+export interface ExamDetailItem {
+  questionId: number
+  type: QuestionType
+  stem: string
+  options: string[]
+  correctAnswer: string | string[]
+  userAnswer: string
+  correct: boolean
+  explanation: string | null
+}
+
 export interface ExamRecord {
   id: number
-  userId: number
   score: number
-  questionIds: number[]
-  answers: Record<string, string>
+  wrongCount: number
+  correctCount: number
+  total: number
   createdAt: number
+  details: ExamDetailItem[]
 }

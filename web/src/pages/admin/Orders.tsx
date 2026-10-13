@@ -81,6 +81,7 @@ export default function AdminOrders() {
               <th className="px-4 py-3">用户</th>
               <th className="px-4 py-3">金额</th>
               <th className="px-4 py-3">微信号</th>
+              <th className="px-4 py-3">VIP码</th>
               <th className="px-4 py-3">商户单号</th>
               <th className="px-4 py-3">状态</th>
               <th className="px-4 py-3">创建时间</th>
@@ -90,14 +91,14 @@ export default function AdminOrders() {
           <tbody className="divide-y divide-gray-100">
             {loading && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={9} className="px-4 py-8 text-center text-gray-400">
                   加载中…
                 </td>
               </tr>
             )}
             {!loading && list.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={9} className="px-4 py-8 text-center text-gray-400">
                   暂无订单
                 </td>
               </tr>
@@ -141,6 +142,7 @@ export default function AdminOrders() {
                       <span className="text-gray-700">{o.wechatId || '—'}</span>
                     )}
                   </td>
+                  <td data-label="VIP码" className="px-4 py-3 font-mono text-xs text-gray-600">{o.vipCode || '—'}</td>
                   <td data-label="商户单号" className="px-4 py-3 text-xs text-gray-500">{o.tradeNo || '—'}</td>
                   <td data-label="状态" className="px-4 py-3">
                     {isEditing ? (

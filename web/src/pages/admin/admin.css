@@ -12,7 +12,7 @@
   .admin-shell { display: block; padding-top: calc(60px + env(safe-area-inset-top)); padding-bottom: calc(82px + env(safe-area-inset-bottom)); }
   .admin-mobile-header { position: fixed; inset: 0 0 auto; z-index: 30; display: flex; align-items: center; justify-content: space-between; height: calc(60px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 16px 0; background: #111827; color: white; }
   .admin-mobile-header a, .admin-mobile-header button { display: inline-flex; min-height: 44px; align-items: center; padding: 0 12px; font-size: 14px; }
-  .admin-mobile-nav { position: fixed; inset: auto 0 0; z-index: 30; display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); border-top: 1px solid #e5e7eb; background: white; padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); }
+  .admin-mobile-nav { position: fixed; inset: auto 0 0; z-index: 30; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); border-top: 1px solid #e5e7eb; background: white; padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); }
   .admin-mobile-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 56px; border-radius: 10px; font-size: 12px; color: #6b7280; }
   .admin-mobile-nav a > span:first-child { font-size: 21px; }
   .admin-mobile-nav .active { background: #fef2f2; color: #b91c1c; font-weight: 600; }
@@ -22,13 +22,18 @@
   .admin-table-wrap { background: transparent; box-shadow: none; overflow: visible; }
   .admin-table, .admin-table tbody { display: block; width: 100%; }
   .admin-table thead { display: none; }
-  .admin-table tbody tr { display: block; padding: 12px 14px; margin-bottom: 12px; background: white; border: 1px solid #e5e7eb; border-radius: 14px; }
-  .admin-table tbody td { display: block; width: 100%; max-width: none; padding: 6px 0; text-align: left; overflow-wrap: anywhere; }
-  .admin-table td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px; }
-  .admin-table td[data-label="ID"], .admin-table td[data-label="题型"], .admin-table td[data-label="状态"] { display: inline-block; width: auto; margin-right: 16px; }
-  .admin-table td[data-label="操作"] { display: flex; gap: 12px; margin-top: 8px; border-top: 1px solid #f3f4f6; }
+  .admin-table tbody tr { display: block; padding: 10px 12px; margin-bottom: 8px; background: white; border: 1px solid #e5e7eb; border-radius: 12px; }
+  .admin-table tbody td { display: block; width: 100%; max-width: none; padding: 3px 0; text-align: left; overflow-wrap: anywhere; }
+  .admin-table td[data-label]::before { content: attr(data-label); display: inline; font-size: 11px; color: #9ca3af; margin-right: 6px; }
+  .admin-table td[data-label="ID"], .admin-table td[data-label="题型"], .admin-table td[data-label="状态"] { display: inline-block; width: auto; margin-right: 12px; }
+  .admin-table td[data-label="操作"] { display: flex; gap: 8px; margin-top: 6px; border-top: 1px solid #f3f4f6; padding-top: 6px; }
   .admin-table td[data-label="操作"]::before { display: none; }
   .admin-table td[data-label="操作"] button { flex: 1; margin: 0; border: 1px solid #e5e7eb; border-radius: 10px; }
+  /* VIP 码表手机端紧凑布局：关键字段并排 */
+  .admin-table td[data-label="激活码"] { display: flex; align-items: center; gap: 8px; }
+  .admin-table td[data-label="激活码"]::before { display: none; }
+  .admin-table td[data-label="领取用户"], .admin-table td[data-label="微信号"], .admin-table td[data-label="金额"] { display: inline-block; width: auto; margin-right: 12px; }
+  .admin-table td[data-label="发放时间"], .admin-table td[data-label="激活时间"], .admin-table td[data-label="创建时间"] { display: inline-block; width: auto; margin-right: 12px; font-size: 11px; }
   .admin-issue-form > button { width: 100%; }
   .admin-shell .admin-dialog-backdrop { padding: 0; align-items: stretch; }
   .admin-shell .admin-dialog { height: 100dvh; max-height: 100dvh; border-radius: 0; padding: 20px 16px calc(16px + env(safe-area-inset-bottom)); }
@@ -36,4 +41,5 @@
   .admin-dialog-actions button { flex: 1; }
 }
 
-.admin-shell .admin-dialog button:disabled { opacity: 0.4; cursor: not-allowed; }
+/* 表格内复制按钮不受全局 44px 最小高度约束 */
+.admin-table-copy-btn { min-height: 0 !important; }

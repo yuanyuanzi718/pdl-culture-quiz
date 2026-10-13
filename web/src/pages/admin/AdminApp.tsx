@@ -83,7 +83,6 @@ function AdminLayout() {
     { to: '/admin/dashboard', label: '数据概览', icon: '📊' },
     { to: '/admin/questions', label: '题库管理', icon: '📚' },
     { to: '/admin/users', label: '用户管理', icon: '👥' },
-    { to: '/admin/orders', label: '收款记录', icon: '💰' },
     { to: '/admin/vip-codes', label: 'VIP 码', icon: '🎟️' },
   ]
 
