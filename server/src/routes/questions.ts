@@ -59,7 +59,7 @@ function pastQuestionIds(userId: number): Set<number> {
   return set;
 }
 
-// 从指定题型中随机抽 n 题，优先未做过的；未做过的不足时从已做过的补足
+// 从指定题型中随机抽 n 题，优先人才评估问卷，其次未做过的；未做过的不足时从已做过的补足
 function pickByType(
   db: ReturnType<typeof getDb>,
   type: string,
@@ -69,6 +69,11 @@ function pickByType(
   const all = db
     .prepare('SELECT * FROM questions WHERE type = ? ORDER BY RANDOM()')
     .all(type) as QuestionRow[];
+  
+  // 优先抽人才评估问卷的题目
+  const talentAssessment = all.filter(r => r.source === '胖东来人才评估问卷');
+  const otherQuestions = all.filter(r => r.source !== '胖东来人才评估问卷');
+  
   // 在原题库中优先抽辨析题：多于两个选项的单选、含干扰项的多选。
   // 未做过的基础题仍优先于做过的辨析题，保持覆盖与不重复。
   const discriminating = (r: QuestionRow): boolean => {
@@ -80,8 +85,19 @@ function pickByType(
   const prioritize = (rows: QuestionRow[]) => [
     ...rows.filter(discriminating), ...rows.filter(r => !discriminating(r)),
   ];
-  const fresh = prioritize(all.filter((r) => !excludeIds.has(r.id)));
-  const used = prioritize(all.filter((r) => excludeIds.has(r.id)));
+  
+  // 人才评估问卷优先
+  const talentFresh = talentAssessment.filter((r) => !excludeIds.has(r.id));
+  const talentUsed = talentAssessment.filter((r) => excludeIds.has(r.id));
+  
+  // 其他题目按辨析度排序
+  const otherFresh = prioritize(otherQuestions.filter((r) => !excludeIds.has(r.id)));
+  const otherUsed = prioritize(otherQuestions.filter((r) => excludeIds.has(r.id)));
+  
+  // 组合：先人才评估未做过，再人才评估做过，再其他未做过，再其他做过
+  const fresh = [...talentFresh, ...otherFresh];
+  const used = [...talentUsed, ...otherUsed];
+  
   // 优先未做过的，不足时用已做过的补足
   const picked = fresh.slice(0, n);
   if (picked.length < n) {
