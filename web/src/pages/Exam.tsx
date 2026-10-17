@@ -262,7 +262,7 @@ export default function Exam() {
         {user ? `每次随机抽取 ${user.examQuestionsPerRound} 道题` : '每次随机抽取一套试卷'}
       </p>
       <p className="mb-4 text-sm text-gray-500">覆盖胖东来文化核心理念</p>
-      <p className="mb-2 text-xs text-gray-400">学习练习题库，非官方招聘考试。包含2025年公示题及资料练习题。</p>
+      <p className="mb-2 text-xs font-medium text-red-500">本题库仅用于学习和了解胖东来企业文化，非官方招聘考试，仅供个人练习参考。</p>
       {totalQuestions > 0 && <p className="mb-8 text-xs text-gray-400">目前题库共有 <span className="font-semibold text-primary">{totalQuestions}</span> 道题</p>}
       <button
         onClick={start}
